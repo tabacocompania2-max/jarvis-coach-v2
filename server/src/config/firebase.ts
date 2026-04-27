@@ -14,20 +14,21 @@ if (fs.existsSync(serviceAccountPath)) {
     credential: admin.credential.cert(serviceAccount),
   });
   console.log('✅ Firebase Admin initialized from JSON file');
-} else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-  console.log('📡 Detectada variable FIREBASE_SERVICE_ACCOUNT, intentando procesar...');
+} else if (process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PROJECT_ID) {
   try {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
     admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      }),
     });
-    console.log('✅ Firebase Admin initialized from environment variable');
+    console.log('✅ Firebase Admin initialized from individual env vars');
   } catch (error: any) {
-    console.error('❌ Error al procesar FIREBASE_SERVICE_ACCOUNT (¿es un JSON válido?):', error.message);
+    console.error('❌ Error initializing Firebase with individual env vars:', error.message);
   }
 } else {
-  console.warn('⚠️ No se encontró la variable FIREBASE_SERVICE_ACCOUNT en process.env');
-  console.log('Variables disponibles (nombres):', Object.keys(process.env).filter(k => !k.includes('KEY') && !k.includes('URL') && !k.includes('SECRET')));
+  console.warn('⚠️ Firebase configuration missing (no JSON file or individual env vars).');
 }
 
 export const auth = admin.auth();
