@@ -1,9 +1,9 @@
 import admin from 'firebase-admin';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 
-// En CommonJS (que estamos usando ahora) __dirname está disponible.
+dotenv.config();
 // Si estuviéramos en ESM, usaríamos fileURLToPath(import.meta.url)
 
 const serviceAccountPath = path.join(process.cwd(), 'firebase-adminsdk.json');
