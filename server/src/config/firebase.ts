@@ -15,17 +15,19 @@ if (fs.existsSync(serviceAccountPath)) {
   });
   console.log('✅ Firebase Admin initialized from JSON file');
 } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+  console.log('📡 Detectada variable FIREBASE_SERVICE_ACCOUNT, intentando procesar...');
   try {
     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
     console.log('✅ Firebase Admin initialized from environment variable');
-  } catch (error) {
-    console.error('❌ Failed to parse FIREBASE_SERVICE_ACCOUNT env var:', error);
+  } catch (error: any) {
+    console.error('❌ Error al procesar FIREBASE_SERVICE_ACCOUNT (¿es un JSON válido?):', error.message);
   }
 } else {
-  console.warn('⚠️ Firebase configuration missing (no JSON file or env var). Backend auth will fail.');
+  console.warn('⚠️ No se encontró la variable FIREBASE_SERVICE_ACCOUNT en process.env');
+  console.log('Variables disponibles (nombres):', Object.keys(process.env).filter(k => !k.includes('KEY') && !k.includes('URL') && !k.includes('SECRET')));
 }
 
 export const auth = admin.auth();
