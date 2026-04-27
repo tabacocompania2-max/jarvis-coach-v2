@@ -8,6 +8,18 @@ import {
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 
+const requiredVars = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+  'VITE_FIREBASE_PROJECT_ID',
+  'VITE_FIREBASE_APP_ID'
+];
+
+const missingVars = requiredVars.filter(key => !import.meta.env[key]);
+if (missingVars.length > 0) {
+  console.error('❌ Faltan variables de entorno en Vercel:', missingVars.join(', '));
+}
+
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
