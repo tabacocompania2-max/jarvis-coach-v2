@@ -11,15 +11,17 @@ export function useSpeech() {
   const [isListening, setIsListening] = useState(false);
   const isListeningRef = useRef(false);
   const [isThinking, setIsThinking] = useState(false);
+  const [isJarvisSpeaking, setIsJarvisSpeaking] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [jarvisResponse, setJarvisResponse] = useState('');
   const jarvisResponseRef = useRef('');
   const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
+  
   const recognitionRef = useRef<any>(null);
-  const audioStreamRef = useRef<MediaStream | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
-  // Sincronizar las referencias con el estado para que las funciones de callback (onresult, onend) 
-  // siempre vean los valores más recientes y no se queden con "clausuras viejas".
   useEffect(() => {
     jarvisResponseRef.current = jarvisResponse;
   }, [jarvisResponse]);
@@ -28,48 +30,84 @@ export function useSpeech() {
     isListeningRef.current = isListening;
   }, [isListening]);
 
-  // 1. Inicializar la cancelación de eco por hardware/software del navegador
+  // Inicializar detección de volumen (VAD)
+  const initializeVoiceDetection = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: false // Importante: no auto-gain para detección acurada
+        } 
+      });
+      
+      streamRef.current = stream;
+      audioContextRef.current = new (window as any).AudioContext();
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      analyserRef.current = audioContextRef.current.createAnalyser();
+      analyserRef.current.fftSize = 2048;
+      source.connect(analyserRef.current);
+      
+      console.log('✅ Voice detection (VAD) initialized');
+    } catch (error) {
+      console.error('❌ Error initializing voice detection:', error);
+    }
+  };
+
+  // Detectar si usuario está hablando basado en el RMS
+  const isUserSpeaking = (): boolean => {
+    if (!analyserRef.current) return false;
+    
+    const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+    analyserRef.current.getByteFrequencyData(dataArray);
+    
+    let sum = 0;
+    for (let i = 0; i < dataArray.length; i++) {
+      sum += dataArray[i] * dataArray[i];
+    }
+    const rms = Math.sqrt(sum / dataArray.length);
+    
+    // Threshold: si RMS > 30, usuario está hablando
+    const VOICE_THRESHOLD = 30;
+    return rms > VOICE_THRESHOLD && !isJarvisSpeaking;
+  };
+
+  // Monitoreo continuo de voz (opcional para logs/UI o disparos rápidos)
   useEffect(() => {
-    const initAEC = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
-          }
-        });
-        audioStreamRef.current = stream;
-        console.log('✅ AEC (Acoustic Echo Cancellation) activado');
-      } catch (err) {
-        console.warn('⚠️ No se pudo activar AEC por hardware:', err);
+    const interval = setInterval(() => {
+      if (isListening && !isJarvisSpeaking) {
+        const speaking = isUserSpeaking();
+        if (!speaking) {
+          // Usuario paró de hablar, procesar audio
+          // Esto ayuda a mantener estados, la lógica real se hace en onresult
+        }
       }
-    };
+    }, 100);
+    
+    return () => clearInterval(interval);
+  }, [isListening, isJarvisSpeaking]);
 
-    initAEC();
-
-    return () => {
-      if (audioStreamRef.current) {
-        audioStreamRef.current.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, []);
-
-  // Detener voz al cerrar o recargar la página
   useEffect(() => {
+    initializeVoiceDetection();
+    
     const handleUnload = () => {
       if (window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
     };
-
     window.addEventListener('beforeunload', handleUnload);
-    // Limpieza al montar: por si quedó algo de la sesión anterior
     if (window.speechSynthesis) window.speechSynthesis.cancel();
 
     return () => {
       window.removeEventListener('beforeunload', handleUnload);
       if (window.speechSynthesis) window.speechSynthesis.cancel();
+      
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
     };
   }, []);
 
@@ -85,6 +123,12 @@ export function useSpeech() {
   }, []);
 
   const startListening = () => {
+    // No iniciar si Jarvis está hablando
+    if (isJarvisSpeaking) {
+      console.log('⏸️  Esperando a que Jarvis termine...');
+      return;
+    }
+
     const SpeechRecognition = (window as any).SpeechRecognition || 
                              (window as any).webkitSpeechRecognition;
     
@@ -96,18 +140,19 @@ export function useSpeech() {
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
-      } catch (e) {
-        // Ignorar si ya estaba detenido
-      }
+      } catch (e) {}
     }
 
     recognitionRef.current = new SpeechRecognition();
     recognitionRef.current.lang = 'es-ES';
-    recognitionRef.current.continuous = true; // ESCUCHA PERMANENTE
-    recognitionRef.current.interimResults = true; // Para detectar interrupciones más rápido
+    // Mantenemos continue para permitir la charla sin apretar el botón constantemente,
+    // pero manejando la finalización en onresult
+    recognitionRef.current.continuous = true; 
+    recognitionRef.current.interimResults = true;
 
     recognitionRef.current.onstart = () => {
       setIsListening(true);
+      setTranscript('');
     };
 
     recognitionRef.current.onresult = async (event: any) => {
@@ -117,26 +162,13 @@ export function useSpeech() {
         const text = event.results[i][0].transcript;
         const isFinal = event.results[i].isFinal;
         
-        // --- LÓGICA DE FILTRO DE ECO / INTERRUPCIÓN ---
-        if (window.speechSynthesis.speaking) {
-          // Normalizar ambos textos para una comparación justa (quitar puntos, comas, etc.)
-          const cleanText = text.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()!?¿¡]/g, "").trim();
-          const cleanJarvis = jarvisResponseRef.current.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()!?¿¡]/g, "").trim();
-          
-          // Si el texto capturado está contenido en lo que Jarvis está diciendo, es eco.
-          const isProbablyEcho = cleanJarvis.includes(cleanText) || cleanText.length < 3;
-
-          if (isProbablyEcho) {
-            console.log('🔇 Eco de Jarvis (normalizado) bloqueado:', cleanText);
-            continue; 
-          } else {
-            console.log('🎙️ Interrupción real detectada:', cleanText);
-            stopSpeaking();
-          }
-        }
-
         if (isFinal) {
-          await handleUserMessage(text);
+          // Solo procesar si usuario está hablando o Jarvis no está hablando
+          if (isUserSpeaking() || !isJarvisSpeaking) {
+            await handleUserMessage(text);
+          } else {
+            console.log('🔇 Eco bloqueado por VAD (Jarvis hablando):', text);
+          }
         } else {
           interimTranscript += text;
         }
@@ -152,13 +184,10 @@ export function useSpeech() {
     };
 
     recognitionRef.current.onend = () => {
-      // USAR REFERENCIA: Para que onend siempre sepa si el usuario apagó el micro o no
       if (isListeningRef.current) {
         try {
           recognitionRef.current.start();
-        } catch (e) {
-          // Ya iniciado
-        }
+        } catch (e) {}
       }
     };
 
@@ -166,6 +195,8 @@ export function useSpeech() {
   };
 
   const handleUserMessage = async (userMessage: string) => {
+    if (!userMessage || userMessage.trim().length === 0) return;
+
     // Agregar mensaje del usuario al historial
     const updatedHistory: ConversationMessage[] = [
       ...conversationHistory,
@@ -180,8 +211,6 @@ export function useSpeech() {
 
     try {
       const token = await getAuthToken();
-      
-      // Usar variable de entorno para la URL del backend, o localhost por defecto
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
       
       const response = await fetch(`${apiUrl}/api/ai/chat`, {
@@ -202,7 +231,6 @@ export function useSpeech() {
       const data = await response.json();
       const jarvisMsg = data.response;
 
-      // Agregar respuesta de Jarvis
       setJarvisResponse(jarvisMsg);
       setConversationHistory([
         ...updatedHistory,
@@ -213,10 +241,18 @@ export function useSpeech() {
         },
       ]);
 
-      // Hablar la respuesta (Jarvis habla en inglés)
-      speakResponse(jarvisMsg);
+      // IMPORTANTE: Marcar que Jarvis está hablando
+      setIsJarvisSpeaking(true);
+      
+      // Hablar la respuesta (espera a que termine)
+      await speakResponse(jarvisMsg);
+      
+      // IMPORTANTE: Marcar que Jarvis terminó
+      setIsJarvisSpeaking(false);
+      
     } catch (error) {
       console.error('Error calling Jarvis:', error);
+      setIsJarvisSpeaking(false);
     } finally {
       setIsThinking(false);
     }
@@ -228,60 +264,83 @@ export function useSpeech() {
     }
   };
 
-  const speakResponse = (text: string) => {
-    if (!('speechSynthesis' in window)) return;
-    
-    // Cancelar cualquier discurso previo
-    stopSpeaking();
-
-    // Dividir el texto en fragmentos de Inglés y Español
-    // Buscamos patrones de frases en inglés o palabras marcadas (usualmente entre comillas o seguidas de traducción)
-    // Para simplificar, dividiremos por frases y detectaremos el idioma predominante de cada una
-    const segments = text.split(/([.!?]+)/).filter(s => s.trim().length > 0);
-    const combinedSegments: string[] = [];
-    
-    for (let i = 0; i < segments.length; i += 2) {
-      const sentence = segments[i] + (segments[i+1] || '');
-      combinedSegments.push(sentence.trim());
-    }
-
-    const voices = window.speechSynthesis.getVoices();
-    
-    // Selección de voces con mayor afinidad entre sí
-    // Buscamos voces masculinas para Jarvis o femeninas según disponibilidad
-    let esVoice = voices.find(v => v.lang.startsWith('es') && v.name.includes('Google')) || 
-                  voices.find(v => v.lang.startsWith('es') && v.name.includes('Natural')) ||
-                  voices.find(v => v.lang.startsWith('es'));
-                    
-    let enVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) || 
-                  voices.find(v => v.lang.startsWith('en') && v.name.includes('Natural')) ||
-                  voices.find(v => v.lang.startsWith('en'));
-
-    combinedSegments.forEach((segment) => {
-      if (!segment) return;
-
-      const utterance = new SpeechSynthesisUtterance(segment);
+  const speakResponse = (text: string): Promise<void> => {
+    return new Promise((resolve) => {
+      if (!('speechSynthesis' in window)) {
+        resolve();
+        return;
+      }
       
-      // Heurística mejorada: Si contiene comillas o frases comunes de ejemplo
-      const hasQuotes = segment.includes('"') || segment.includes("'");
-      const hasEnglishWords = /\b(the|is|are|you|it|in|to|and|was|were|have|has|i|am|my|this|that|with)\b/i.test(segment);
-      
-      // Si el segmento es corto y tiene comillas, es casi seguro inglés
-      const isEnglish = (hasQuotes && segment.length < 100) || (hasEnglishWords && !/[áéíóúñ]/i.test(segment));
+      // Cancelar discurso previo
+      stopSpeaking();
 
-      if (isEnglish) {
-        utterance.voice = enVoice || null;
-        utterance.lang = 'en-US';
-        utterance.rate = 0.85; // Un poco más pausado para el inglés
-        utterance.pitch = 0.95; // Un toque más profundo para sonar a Jarvis
-      } else {
-        utterance.voice = esVoice || null;
-        utterance.lang = 'es-ES';
-        utterance.rate = 1.0;
-        utterance.pitch = 0.95; // Mantener el mismo tono que en inglés
+      // Dividir el texto en fragmentos (Bilingüe)
+      const segments = text.split(/([.!?]+)/).filter(s => s.trim().length > 0);
+      const combinedSegments: string[] = [];
+      
+      for (let i = 0; i < segments.length; i += 2) {
+        const sentence = segments[i] + (segments[i+1] || '');
+        combinedSegments.push(sentence.trim());
       }
 
-      window.speechSynthesis.speak(utterance);
+      if (combinedSegments.length === 0) {
+        resolve();
+        return;
+      }
+
+      const voices = window.speechSynthesis.getVoices();
+      
+      let esVoice = voices.find(v => v.lang.startsWith('es') && v.name.includes('Google')) || 
+                    voices.find(v => v.lang.startsWith('es') && v.name.includes('Natural')) ||
+                    voices.find(v => v.lang.startsWith('es'));
+                      
+      let enVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) || 
+                    voices.find(v => v.lang.startsWith('en') && v.name.includes('Natural')) ||
+                    voices.find(v => v.lang.startsWith('en'));
+
+      let currentIndex = 0;
+
+      // Reproducir segmentos de forma secuencial
+      const speakNextSegment = () => {
+        if (currentIndex >= combinedSegments.length) {
+          resolve();
+          return;
+        }
+
+        const segment = combinedSegments[currentIndex];
+        const utterance = new SpeechSynthesisUtterance(segment);
+        
+        const hasQuotes = segment.includes('"') || segment.includes("'");
+        const hasEnglishWords = /\b(the|is|are|you|it|in|to|and|was|were|have|has|i|am|my|this|that|with)\b/i.test(segment);
+        const isEnglish = (hasQuotes && segment.length < 100) || (hasEnglishWords && !/[áéíóúñ]/i.test(segment));
+
+        if (isEnglish) {
+          utterance.voice = enVoice || null;
+          utterance.lang = 'en-US';
+          utterance.rate = 0.85;
+          utterance.pitch = 0.95;
+        } else {
+          utterance.voice = esVoice || null;
+          utterance.lang = 'es-ES';
+          utterance.rate = 1.0;
+          utterance.pitch = 0.95;
+        }
+
+        utterance.onend = () => {
+          currentIndex++;
+          speakNextSegment();
+        };
+
+        utterance.onerror = (e) => {
+          console.error('Speech synthesis error', e);
+          currentIndex++;
+          speakNextSegment();
+        };
+
+        window.speechSynthesis.speak(utterance);
+      };
+
+      speakNextSegment();
     });
   };
 
@@ -290,15 +349,14 @@ export function useSpeech() {
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
-      } catch (e) {
-        // Ignorar si ya estaba detenido
-      }
+      } catch (e) {}
     }
   };
 
   return {
     isListening,
     isThinking,
+    isJarvisSpeaking,
     transcript,
     jarvisResponse,
     conversationHistory,
