@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jarvis-cache-v1';
+const CACHE_NAME = 'jarvis-cache-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -53,6 +53,14 @@ self.addEventListener('fetch', (event) => {
         .catch(() => {
           return new Response('Sin conexión a internet', { status: 503 });
         })
+    );
+    return;
+  }
+
+  // Estrategia Network First para HTML
+  if (request.headers.get('accept')?.includes('text/html')) {
+    event.respondWith(
+      fetch(request).catch(() => caches.match(request) as Promise<Response>)
     );
     return;
   }
