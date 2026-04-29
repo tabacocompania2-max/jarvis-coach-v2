@@ -18,9 +18,6 @@ export function useSpeech() {
   const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
   
   const recognitionRef = useRef<any>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     jarvisResponseRef.current = jarvisResponse;
@@ -30,84 +27,10 @@ export function useSpeech() {
     isListeningRef.current = isListening;
   }, [isListening]);
 
-  // Inicializar detección de volumen (VAD)
-  const initializeVoiceDetection = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true // Habilitado para evitar que el micrófono quede casi en silencio
-        } 
-      });
-      
-      streamRef.current = stream;
-      audioContextRef.current = new (window as any).AudioContext();
-      const source = audioContextRef.current!.createMediaStreamSource(stream);
-      analyserRef.current = audioContextRef.current!.createAnalyser();
-      analyserRef.current.fftSize = 2048;
-      source.connect(analyserRef.current);
-      
-      console.log('✅ Voice detection (VAD) initialized');
-    } catch (error) {
-      console.error('❌ Error initializing voice detection:', error);
-    }
-  };
+  // Funciones VAD eliminadas en favor del sistema Wake Word ("Jarvis")
 
-  // Detectar si es voz humana real o síntesis de Jarvis
-  const isHumanVoice = (): boolean => {
-    if (!analyserRef.current) return false;
-    
-    const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-    analyserRef.current.getByteFrequencyData(dataArray);
-    
-    // Voz humana: altamente variable (variance > 50)
-    // Síntesis: predecible y estable (variance < 30)
-    const mean = dataArray.reduce((a, b) => a + b) / dataArray.length;
-    const variance = dataArray.reduce((sq, n) => sq + Math.pow(n - mean, 2), 0) / dataArray.length;
-    
-    return variance > 50; // Threshold: mucho más permisivo
-  };
-
-  // Detectar si usuario está hablando basado en el RMS
-  const isUserSpeaking = (): boolean => {
-    if (!analyserRef.current) return false;
-    
-    const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-    analyserRef.current.getByteFrequencyData(dataArray);
-    
-    // Calcular RMS (volumen)
-    let sum = 0;
-    for (let i = 0; i < dataArray.length; i++) {
-      sum += dataArray[i] * dataArray[i];
-    }
-    const rms = Math.sqrt(sum / dataArray.length);
-    
-    // ESTRATEGIA TRIPLE:
-    // 1. Threshold de volumen dinámico
-    // 2. Detección de voz humana (variance)
-    // 3. Estado de Jarvis hablando
-    
-    const THRESHOLD_INTERRUPT = 30;  // Para interrumpir a Jarvis
-    const THRESHOLD_NORMAL = 10;     // Conversación normal
-    
-    const threshold = isJarvisSpeaking ? THRESHOLD_INTERRUPT : THRESHOLD_NORMAL;
-    const hasEnoughVolume = rms > threshold;
-    const isRealHumanVoice = isHumanVoice();
-    
-    // Solo retornar true si:
-    // - Tiene volumen suficiente Y
-    // - Es voz humana real (no síntesis)
-    return hasEnoughVolume && isRealHumanVoice;
-  };
-
-  // El monitoreo continuo (setInterval) fue eliminado para ahorrar batería en celulares
-  // y evitar spam en la consola. Solo evaluaremos el audio cuando SpeechRecognition
-  // detecte palabras reales.
 
   useEffect(() => {
-    initializeVoiceDetection();
-    
     const handleUnload = () => {
       if (window.speechSynthesis) {
         window.speechSynthesis.cancel();
@@ -119,13 +42,6 @@ export function useSpeech() {
     return () => {
       window.removeEventListener('beforeunload', handleUnload);
       if (window.speechSynthesis) window.speechSynthesis.cancel();
-      
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
     };
   }, []);
 
@@ -141,9 +57,8 @@ export function useSpeech() {
   }, []);
 
   const startListening = () => {
-    // No iniciar si Jarvis está hablando
-    if (isJarvisSpeaking) {
-      console.log('⏸️  Esperando a que Jarvis termine...');
+    // No iniciar si Jarvis está pensando
+    if (isThinking) {
       return;
     }
 
@@ -163,8 +78,6 @@ export function useSpeech() {
 
     recognitionRef.current = new SpeechRecognition();
     recognitionRef.current.lang = 'es-ES';
-    // Mantenemos continue para permitir la charla sin apretar el botón constantemente,
-    // pero manejando la finalización en onresult
     recognitionRef.current.continuous = true; 
     recognitionRef.current.interimResults = true;
 
@@ -180,34 +93,38 @@ export function useSpeech() {
         const text = event.results[i][0].transcript;
         const isFinal = event.results[i].isFinal;
         
-        if (isFinal) {
-          // ✅ LÓGICA FINAL Y DEFINITIVA:
-          // En celulares, la varianza/RMS puede fallar. Si Jarvis NO está hablando,
-          // confiamos al 100% en lo que escuchó Google (text).
-          // Solo usamos el VAD estricto si intentamos interrumpir a Jarvis.
-          const isValidSpeech = !isJarvisSpeaking || isUserSpeaking();
+        const textLower = text.toLowerCase();
+        // Variaciones comunes de Jarvis en el dictado de español
+        const hasJarvis = textLower.includes('jarvis') || textLower.includes('harvis') || textLower.includes('yarbiz') || textLower.includes('llarvis');
 
-          if (isValidSpeech) {
-            // Usuario está hablando: SIEMPRE procesar
-            console.log('🎤 ✅ Usuario detectado, procesando:', text);
+        if (isFinal) {
+          if (hasJarvis) {
+            // Usuario dijo la palabra mágica: SIEMPRE procesar
+            console.log('🎤 ✅ Wake word detectado, procesando:', text);
             
-            // Si Jarvis estaba hablando, INTERRUMPIRLO INMEDIATAMENTE
+            // Si Jarvis estaba hablando, INTERRUMPIRLO
             if (isJarvisSpeaking) {
-              console.log('⏹️  INTERRUMPIENDO A JARVIS');
+              console.log('⏹️  INTERRUMPIENDO A JARVIS (Wake word detectado)');
               window.speechSynthesis.cancel();
               setIsJarvisSpeaking(false);
             }
             
             await handleUserMessage(text);
           } else {
-            // NO es usuario: ignorar completamente
-            // (Es echo, síntesis de Jarvis, o ruido)
-            console.log('🔇 ❌ Rechazado: Interrupción no válida o es eco de Jarvis');
+            // NO dijo Jarvis: ignorar completamente (útil para ruido de fondo, TV, pláticas ajenas)
+            console.log('🔇 ❌ Rechazado: No dijo "Jarvis" ->', text);
           }
         } else {
-          // Transcript provisional
-          const isValidInterim = !isJarvisSpeaking || isUserSpeaking();
-          if (isValidInterim) {
+          // Si estamos en un resultado intermedio y Jarvis está hablando,
+          // verificamos rápido si dijo "Jarvis" para interrumpirlo lo antes posible
+          if (isJarvisSpeaking && hasJarvis) {
+              console.log('⏹️  INTERRUMPIENDO A JARVIS (Interim Wake word)');
+              window.speechSynthesis.cancel();
+              setIsJarvisSpeaking(false);
+          }
+          
+          // Solo mostrar el texto provisional si Jarvis no está hablando o si ya lo interrumpimos
+          if (!isJarvisSpeaking) {
             interimTranscript += text;
           }
         }
