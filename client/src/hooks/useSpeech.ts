@@ -204,7 +204,12 @@ export function useSpeech() {
         
         if (isFinal) {
           // ✅ LÓGICA FINAL Y DEFINITIVA:
-          if (isUserSpeaking()) {
+          // En celulares, la varianza/RMS puede fallar. Si Jarvis NO está hablando,
+          // confiamos al 100% en lo que escuchó Google (text).
+          // Solo usamos el VAD estricto si intentamos interrumpir a Jarvis.
+          const isValidSpeech = !isJarvisSpeaking || isUserSpeaking();
+
+          if (isValidSpeech) {
             // Usuario está hablando: SIEMPRE procesar
             console.log('🎤 ✅ Usuario detectado, procesando:', text);
             
@@ -219,11 +224,12 @@ export function useSpeech() {
           } else {
             // NO es usuario: ignorar completamente
             // (Es echo, síntesis de Jarvis, o ruido)
-            console.log('🔇 ❌ Rechazado: No es voz humana o volumen insuficiente');
+            console.log('🔇 ❌ Rechazado: Interrupción no válida o es eco de Jarvis');
           }
         } else {
-          // Transcript provisional: solo si usuario está hablando
-          if (isUserSpeaking()) {
+          // Transcript provisional
+          const isValidInterim = !isJarvisSpeaking || isUserSpeaking();
+          if (isValidInterim) {
             interimTranscript += text;
           }
         }
