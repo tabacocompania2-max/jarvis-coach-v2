@@ -26,6 +26,6 @@ app.get('/api/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', message: 'ELC Server is running' });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 ELC Server running on http://localhost:${PORT}`);
+app.listen(Number(PORT), '0.0.0.0', () => {
+  console.log(`🚀 ELC Server running on http://0.0.0.0:${PORT}`);
 });
