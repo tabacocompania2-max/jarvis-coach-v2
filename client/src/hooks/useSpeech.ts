@@ -37,7 +37,7 @@ export function useSpeech() {
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: false // Importante: no auto-gain para detección acurada
+          autoGainControl: true // Habilitado para evitar que el micrófono quede casi en silencio
         } 
       });
       
@@ -67,9 +67,9 @@ export function useSpeech() {
     const mean = dataArray.reduce((a, b) => a + b) / dataArray.length;
     const variance = dataArray.reduce((sq, n) => sq + Math.pow(n - mean, 2), 0) / dataArray.length;
     
-    console.log('📊 Variance (humano >500, síntesis <400):', variance.toFixed(2));
+    console.log('📊 Variance (humano >50, síntesis <30):', variance.toFixed(2));
     
-    return variance > 300; // Threshold: 300 = voz real (más permisivo)
+    return variance > 50; // Threshold: mucho más permisivo
   };
 
   // Detectar si usuario está hablando basado en el RMS
@@ -91,8 +91,8 @@ export function useSpeech() {
     // 2. Detección de voz humana (variance)
     // 3. Estado de Jarvis hablando
     
-    const THRESHOLD_INTERRUPT = 50;  // Para interrumpir a Jarvis (más bajo)
-    const THRESHOLD_NORMAL = 30;     // Conversación normal
+    const THRESHOLD_INTERRUPT = 30;  // Para interrumpir a Jarvis
+    const THRESHOLD_NORMAL = 10;     // Conversación normal
     
     const threshold = isJarvisSpeaking ? THRESHOLD_INTERRUPT : THRESHOLD_NORMAL;
     const hasEnoughVolume = rms > threshold;
