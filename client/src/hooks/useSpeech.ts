@@ -61,13 +61,10 @@ export function useSpeech() {
     const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
     analyserRef.current.getByteFrequencyData(dataArray);
     
-    // Calcular varianza de frecuencias
-    // Voz humana: altamente variable (variance > 500)
-    // Síntesis: predecible y estable (variance < 400)
+    // Voz humana: altamente variable (variance > 50)
+    // Síntesis: predecible y estable (variance < 30)
     const mean = dataArray.reduce((a, b) => a + b) / dataArray.length;
     const variance = dataArray.reduce((sq, n) => sq + Math.pow(n - mean, 2), 0) / dataArray.length;
-    
-    console.log('📊 Variance (humano >50, síntesis <30):', variance.toFixed(2));
     
     return variance > 50; // Threshold: mucho más permisivo
   };
@@ -96,36 +93,17 @@ export function useSpeech() {
     
     const threshold = isJarvisSpeaking ? THRESHOLD_INTERRUPT : THRESHOLD_NORMAL;
     const hasEnoughVolume = rms > threshold;
-    // Log detallado para debuggear
     const isRealHumanVoice = isHumanVoice();
-    console.log(`🎤 Check: RMS=${rms.toFixed(0)}, Human=${isRealHumanVoice}, Threshold=${threshold}`);
     
     // Solo retornar true si:
     // - Tiene volumen suficiente Y
     // - Es voz humana real (no síntesis)
-    const userSpeaking = hasEnoughVolume && isRealHumanVoice;
-    
-    if (userSpeaking) {
-      console.log(`🎤 Usuario hablando (RMS: ${rms.toFixed(0)}, Humano: true)`);
-    }
-    
-    return userSpeaking;
+    return hasEnoughVolume && isRealHumanVoice;
   };
 
-  // Monitoreo continuo de voz (opcional para logs/UI o disparos rápidos)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (isListening && !isJarvisSpeaking) {
-        const speaking = isUserSpeaking();
-        if (!speaking) {
-          // Usuario paró de hablar, procesar audio
-          // Esto ayuda a mantener estados, la lógica real se hace en onresult
-        }
-      }
-    }, 100);
-    
-    return () => clearInterval(interval);
-  }, [isListening, isJarvisSpeaking]);
+  // El monitoreo continuo (setInterval) fue eliminado para ahorrar batería en celulares
+  // y evitar spam en la consola. Solo evaluaremos el audio cuando SpeechRecognition
+  // detecte palabras reales.
 
   useEffect(() => {
     initializeVoiceDetection();
