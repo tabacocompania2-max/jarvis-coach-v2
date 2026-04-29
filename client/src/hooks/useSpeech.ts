@@ -69,7 +69,7 @@ export function useSpeech() {
     
     console.log('📊 Variance (humano >500, síntesis <400):', variance.toFixed(2));
     
-    return variance > 500; // Threshold: 500 = voz real
+    return variance > 300; // Threshold: 300 = voz real (más permisivo)
   };
 
   // Detectar si usuario está hablando basado en el RMS
@@ -91,12 +91,14 @@ export function useSpeech() {
     // 2. Detección de voz humana (variance)
     // 3. Estado de Jarvis hablando
     
-    const THRESHOLD_INTERRUPT = 70;  // Para interrumpir a Jarvis
+    const THRESHOLD_INTERRUPT = 50;  // Para interrumpir a Jarvis (más bajo)
     const THRESHOLD_NORMAL = 30;     // Conversación normal
     
     const threshold = isJarvisSpeaking ? THRESHOLD_INTERRUPT : THRESHOLD_NORMAL;
     const hasEnoughVolume = rms > threshold;
+    // Log detallado para debuggear
     const isRealHumanVoice = isHumanVoice();
+    console.log(`🎤 Check: RMS=${rms.toFixed(0)}, Human=${isRealHumanVoice}, Threshold=${threshold}`);
     
     // Solo retornar true si:
     // - Tiene volumen suficiente Y
