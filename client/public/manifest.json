@@ -1,0 +1,83 @@
+{
+  "name": "English Learning Coach - Jarvis",
+  "short_name": "Jarvis",
+  "description": "Tu profesor de inglés 24/7 con IA. Aprende 20 palabras diarias con pronunciación, ejemplos y retroalimentación instantánea.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "dir": "ltr",
+  "lang": "es-ES",
+  "theme_color": "#0f0f1e",
+  "background_color": "#0f0f1e",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-narrow-540.png",
+      "sizes": "540x720",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Pantalla principal de Jarvis"
+    },
+    {
+      "src": "/screenshot-narrow-1080.png",
+      "sizes": "1080x1440",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Dashboard de estadísticas"
+    }
+  ],
+  "categories": ["education", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Empezar lección",
+      "short_name": "Lección",
+      "description": "Iniciar nueva lección de inglés con 20 palabras",
+      "url": "/dashboard",
+      "icons": [
+        {
+          "src": "/icon-96.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Ver estadísticas",
+      "short_name": "Estadísticas",
+      "description": "Ver progreso y gráficos",
+      "url": "/stats",
+      "icons": [
+        {
+          "src": "/icon-96.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ]
+}

@@ -43,8 +43,8 @@ export function useSpeech() {
       
       streamRef.current = stream;
       audioContextRef.current = new (window as any).AudioContext();
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-      analyserRef.current = audioContextRef.current.createAnalyser();
+      const source = audioContextRef.current!.createMediaStreamSource(stream);
+      analyserRef.current = audioContextRef.current!.createAnalyser();
       analyserRef.current.fftSize = 2048;
       source.connect(analyserRef.current);
       
