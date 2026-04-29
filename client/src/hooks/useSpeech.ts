@@ -54,6 +54,24 @@ export function useSpeech() {
     }
   };
 
+  // Detectar si es voz humana real o síntesis de Jarvis
+  const isHumanVoice = (): boolean => {
+    if (!analyserRef.current) return false;
+    
+    const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+    analyserRef.current.getByteFrequencyData(dataArray);
+    
+    // Calcular varianza de frecuencias
+    // Voz humana: altamente variable (variance > 500)
+    // Síntesis: predecible y estable (variance < 400)
+    const mean = dataArray.reduce((a, b) => a + b) / dataArray.length;
+    const variance = dataArray.reduce((sq, n) => sq + Math.pow(n - mean, 2), 0) / dataArray.length;
+    
+    console.log('📊 Variance (humano >500, síntesis <400):', variance.toFixed(2));
+    
+    return variance > 500; // Threshold: 500 = voz real
+  };
+
   // Detectar si usuario está hablando basado en el RMS
   const isUserSpeaking = (): boolean => {
     if (!analyserRef.current) return false;
@@ -61,15 +79,35 @@ export function useSpeech() {
     const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
     analyserRef.current.getByteFrequencyData(dataArray);
     
+    // Calcular RMS (volumen)
     let sum = 0;
     for (let i = 0; i < dataArray.length; i++) {
       sum += dataArray[i] * dataArray[i];
     }
     const rms = Math.sqrt(sum / dataArray.length);
     
-    // Threshold: si RMS > 30, usuario está hablando
-    const VOICE_THRESHOLD = 30;
-    return rms > VOICE_THRESHOLD && !isJarvisSpeaking;
+    // ESTRATEGIA TRIPLE:
+    // 1. Threshold de volumen dinámico
+    // 2. Detección de voz humana (variance)
+    // 3. Estado de Jarvis hablando
+    
+    const THRESHOLD_INTERRUPT = 70;  // Para interrumpir a Jarvis
+    const THRESHOLD_NORMAL = 30;     // Conversación normal
+    
+    const threshold = isJarvisSpeaking ? THRESHOLD_INTERRUPT : THRESHOLD_NORMAL;
+    const hasEnoughVolume = rms > threshold;
+    const isRealHumanVoice = isHumanVoice();
+    
+    // Solo retornar true si:
+    // - Tiene volumen suficiente Y
+    // - Es voz humana real (no síntesis)
+    const userSpeaking = hasEnoughVolume && isRealHumanVoice;
+    
+    if (userSpeaking) {
+      console.log(`🎤 Usuario hablando (RMS: ${rms.toFixed(0)}, Humano: true)`);
+    }
+    
+    return userSpeaking;
   };
 
   // Monitoreo continuo de voz (opcional para logs/UI o disparos rápidos)
@@ -163,18 +201,36 @@ export function useSpeech() {
         const isFinal = event.results[i].isFinal;
         
         if (isFinal) {
-          // Solo procesar si usuario está hablando o Jarvis no está hablando
-          if (isUserSpeaking() || !isJarvisSpeaking) {
+          // ✅ LÓGICA FINAL Y DEFINITIVA:
+          if (isUserSpeaking()) {
+            // Usuario está hablando: SIEMPRE procesar
+            console.log('🎤 ✅ Usuario detectado, procesando:', text);
+            
+            // Si Jarvis estaba hablando, INTERRUMPIRLO INMEDIATAMENTE
+            if (isJarvisSpeaking) {
+              console.log('⏹️  INTERRUMPIENDO A JARVIS');
+              window.speechSynthesis.cancel();
+              setIsJarvisSpeaking(false);
+            }
+            
             await handleUserMessage(text);
           } else {
-            console.log('🔇 Eco bloqueado por VAD (Jarvis hablando):', text);
+            // NO es usuario: ignorar completamente
+            // (Es echo, síntesis de Jarvis, o ruido)
+            console.log('🔇 ❌ Rechazado: No es voz humana o volumen insuficiente');
           }
         } else {
-          interimTranscript += text;
+          // Transcript provisional: solo si usuario está hablando
+          if (isUserSpeaking()) {
+            interimTranscript += text;
+          }
         }
       }
 
-      setTranscript(interimTranscript);
+      // Actualizar transcripción visible
+      if (interimTranscript) {
+        setTranscript(interimTranscript);
+      }
     };
 
     recognitionRef.current.onerror = (event: any) => {
@@ -249,6 +305,13 @@ export function useSpeech() {
       
       // IMPORTANTE: Marcar que Jarvis terminó
       setIsJarvisSpeaking(false);
+      
+      // ✅ PAUSA CRÍTICA: Esperar a que el audio de síntesis 
+      // termine de propagarse completamente a través del sistema
+      // Esto evita que se capture "cola" del audio después
+      console.log('⏸️  Pausa post-síntesis (600ms)...');
+      await new Promise(resolve => setTimeout(resolve, 600));
+      console.log('✅ Reactivando escucha');
       
     } catch (error) {
       console.error('Error calling Jarvis:', error);
