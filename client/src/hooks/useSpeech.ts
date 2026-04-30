@@ -18,6 +18,9 @@ export function useSpeech() {
   const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
   
   const recognitionRef = useRef<any>(null);
+  const accumulatedTextRef = useRef('');
+  const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const clearAccumulatorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     jarvisResponseRef.current = jarvisResponse;
@@ -94,45 +97,51 @@ export function useSpeech() {
         const isFinal = event.results[i].isFinal;
         
         const textLower = text.toLowerCase();
-        // Variaciones comunes de Jarvis en el dictado de español
         const hasJarvis = textLower.includes('jarvis') || textLower.includes('harvis') || textLower.includes('yarbiz') || textLower.includes('llarvis');
 
         if (isFinal) {
-          if (hasJarvis) {
-            // Usuario dijo la palabra mágica: SIEMPRE procesar
-            console.log('🎤 ✅ Wake word detectado, procesando:', text);
-            
-            // Si Jarvis estaba hablando, INTERRUMPIRLO
-            if (isJarvisSpeaking) {
-              console.log('⏹️  INTERRUMPIENDO A JARVIS (Wake word detectado)');
-              window.speechSynthesis.cancel();
-              setIsJarvisSpeaking(false);
-            }
-            
-            await handleUserMessage(text);
-          } else {
-            // NO dijo Jarvis: ignorar completamente (útil para ruido de fondo, TV, pláticas ajenas)
-            console.log('🔇 ❌ Rechazado: No dijo "Jarvis" ->', text);
-          }
+          accumulatedTextRef.current += ' ' + text;
         } else {
-          // Si estamos en un resultado intermedio y Jarvis está hablando,
-          // verificamos rápido si dijo "Jarvis" para interrumpirlo lo antes posible
-          if (isJarvisSpeaking && hasJarvis) {
-              console.log('⏹️  INTERRUMPIENDO A JARVIS (Interim Wake word)');
-              window.speechSynthesis.cancel();
-              setIsJarvisSpeaking(false);
-          }
-          
-          // Solo mostrar el texto provisional si Jarvis no está hablando o si ya lo interrumpimos
-          if (!isJarvisSpeaking) {
-            interimTranscript += text;
-          }
+          interimTranscript += text;
+        }
+
+        // Si escuchamos el wake word mientras Jarvis habla, lo interrumpimos de inmediato
+        if (isJarvisSpeaking && hasJarvis) {
+          console.log('⏹️  INTERRUMPIENDO A JARVIS (Wake word detectado)');
+          window.speechSynthesis.cancel();
+          setIsJarvisSpeaking(false);
         }
       }
 
-      // Actualizar transcripción visible
-      if (interimTranscript) {
-        setTranscript(interimTranscript);
+      const totalTextLower = (accumulatedTextRef.current + ' ' + interimTranscript).toLowerCase();
+      const totalHasJarvis = totalTextLower.includes('jarvis') || totalTextLower.includes('harvis') || totalTextLower.includes('yarbiz') || totalTextLower.includes('llarvis');
+
+      // Limpiar timeouts para reiniciar el conteo de silencio
+      if (speechTimeoutRef.current) clearTimeout(speechTimeoutRef.current);
+      if (clearAccumulatorTimeoutRef.current) clearTimeout(clearAccumulatorTimeoutRef.current);
+
+      if (totalHasJarvis) {
+        // El usuario ya dijo Jarvis. Esperar 1.8 segundos de silencio absoluto antes de responder.
+        speechTimeoutRef.current = setTimeout(async () => {
+          console.log('🎤 ✅ Wake word y silencio detectado, procesando:', accumulatedTextRef.current);
+          const messageToSend = accumulatedTextRef.current.trim();
+          accumulatedTextRef.current = '';
+          setTranscript('');
+          if (messageToSend) {
+            await handleUserMessage(messageToSend);
+          }
+        }, 1800);
+      } else {
+        // Si no ha dicho Jarvis, borrar la basura acumulada tras 3 segundos de silencio
+        clearAccumulatorTimeoutRef.current = setTimeout(() => {
+          accumulatedTextRef.current = '';
+          setTranscript('');
+        }, 3000);
+      }
+
+      // Actualizar transcripción visible en tiempo real
+      if (interimTranscript || accumulatedTextRef.current) {
+        setTranscript((accumulatedTextRef.current + ' ' + interimTranscript).trim());
       }
     };
 
