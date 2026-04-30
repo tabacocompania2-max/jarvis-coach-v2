@@ -61,11 +61,7 @@ export function LoginPage() {
     }
   };
 
-  const getTitle = () => {
-    if (view === 'login') return 'Bienvenido de nuevo';
-    if (view === 'register') return 'Comienza tu aventura';
-    return 'Recuperar acceso';
-  };
+
 
   const getSubtitle = () => {
     if (view === 'login') return 'Inicia sesión para continuar con tu aprendizaje';
@@ -154,7 +150,7 @@ export function LoginPage() {
                     className="w-full bg-[#151520] border border-white/5 rounded-xl px-4 py-3.5 pl-12 text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    required={view !== 'reset'}
+                    required
                   />
                 </motion.div>
               )}
