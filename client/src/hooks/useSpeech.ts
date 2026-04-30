@@ -93,10 +93,26 @@ export function useSpeech() {
     return () => clearInterval(interval);
   }, [volume, isListening, transcript]);
 
+  const primeSpeechSynthesis = () => {
+    if (!window.speechSynthesis) return;
+    const utterance = new SpeechSynthesisUtterance("");
+    utterance.volume = 0;
+    window.speechSynthesis.speak(utterance);
+  };
+
   const handleUserMessage = async (userMessage: string) => {
     if (!userMessage || userMessage.trim().length === 0 || processingRef.current) return;
 
     processingRef.current = true;
+    
+    // DETENER MICRÓFONO antes de procesar y hablar (Crítico para móviles)
+    if (recognitionRef.current) {
+      try {
+        manualStopRef.current = true; // Pausa temporal
+        recognitionRef.current.stop();
+      } catch (e) {}
+    }
+
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     setIsJarvisSpeaking(false);
 
@@ -145,9 +161,15 @@ export function useSpeech() {
       await speakResponse(jarvisMsg);
       setIsJarvisSpeaking(false);
       
+      // REANUDAR escucha después de hablar
+      setTimeout(() => {
+        startListening();
+      }, 300);
+      
     } catch (error) {
       console.error('Error calling Jarvis:', error);
       setIsJarvisSpeaking(false);
+      startListening(); // Reintentar escuchar si falla
     } finally {
       setIsThinking(false);
       processingRef.current = false;
@@ -202,6 +224,7 @@ export function useSpeech() {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
+    primeSpeechSynthesis(); // DESBLOQUEAR audio en móvil
     startVolumeAnalysis();
 
     if (recognitionRef.current) {
