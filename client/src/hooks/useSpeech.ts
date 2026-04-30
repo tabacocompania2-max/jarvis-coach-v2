@@ -9,29 +9,14 @@ interface ConversationMessage {
 
 export function useSpeech() {
   const [isListening, setIsListening] = useState(false);
-  const isListeningRef = useRef(false);
   const [isThinking, setIsThinking] = useState(false);
   const [isJarvisSpeaking, setIsJarvisSpeaking] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [jarvisResponse, setJarvisResponse] = useState('');
-  const jarvisResponseRef = useRef('');
   const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
   
   const recognitionRef = useRef<any>(null);
-  const accumulatedTextRef = useRef('');
-  const speechTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const clearAccumulatorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    jarvisResponseRef.current = jarvisResponse;
-  }, [jarvisResponse]);
-
-  useEffect(() => {
-    isListeningRef.current = isListening;
-  }, [isListening]);
-
-  // Funciones VAD eliminadas en favor del sistema Wake Word ("Jarvis")
-
+  const manualStopRef = useRef(false);
 
   useEffect(() => {
     const handleUnload = () => {
@@ -59,111 +44,14 @@ export function useSpeech() {
     }
   }, []);
 
-  const startListening = () => {
-    // No iniciar si Jarvis está pensando
-    if (isThinking) {
-      return;
-    }
-
-    const SpeechRecognition = (window as any).SpeechRecognition || 
-                             (window as any).webkitSpeechRecognition;
-    
-    if (!SpeechRecognition) {
-      console.error('Speech recognition not supported in this browser');
-      return;
-    }
-
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (e) {}
-    }
-
-    recognitionRef.current = new SpeechRecognition();
-    recognitionRef.current.lang = 'es-ES';
-    recognitionRef.current.continuous = true; 
-    recognitionRef.current.interimResults = true;
-
-    recognitionRef.current.onstart = () => {
-      setIsListening(true);
-      setTranscript('');
-    };
-
-    recognitionRef.current.onresult = async (event: any) => {
-      let interimTranscript = '';
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const text = event.results[i][0].transcript;
-        const isFinal = event.results[i].isFinal;
-        
-        const textLower = text.toLowerCase();
-        const hasJarvis = textLower.includes('jarvis') || textLower.includes('harvis') || textLower.includes('yarbiz') || textLower.includes('llarvis');
-
-        if (isFinal) {
-          accumulatedTextRef.current += ' ' + text;
-        } else {
-          interimTranscript += text;
-        }
-
-        // Si escuchamos el wake word mientras Jarvis habla, lo interrumpimos de inmediato
-        if (isJarvisSpeaking && hasJarvis) {
-          console.log('⏹️  INTERRUMPIENDO A JARVIS (Wake word detectado)');
-          window.speechSynthesis.cancel();
-          setIsJarvisSpeaking(false);
-        }
-      }
-
-      const totalTextLower = (accumulatedTextRef.current + ' ' + interimTranscript).toLowerCase();
-      const totalHasJarvis = totalTextLower.includes('jarvis') || totalTextLower.includes('harvis') || totalTextLower.includes('yarbiz') || totalTextLower.includes('llarvis');
-
-      // Limpiar timeouts para reiniciar el conteo de silencio
-      if (speechTimeoutRef.current) clearTimeout(speechTimeoutRef.current);
-      if (clearAccumulatorTimeoutRef.current) clearTimeout(clearAccumulatorTimeoutRef.current);
-
-      if (totalHasJarvis) {
-        // El usuario ya dijo Jarvis. Esperar 1.8 segundos de silencio absoluto antes de responder.
-        speechTimeoutRef.current = setTimeout(async () => {
-          console.log('🎤 ✅ Wake word y silencio detectado, procesando:', accumulatedTextRef.current);
-          const messageToSend = accumulatedTextRef.current.trim();
-          accumulatedTextRef.current = '';
-          setTranscript('');
-          if (messageToSend) {
-            await handleUserMessage(messageToSend);
-          }
-        }, 1800);
-      } else {
-        // Si no ha dicho Jarvis, borrar la basura acumulada tras 3 segundos de silencio
-        clearAccumulatorTimeoutRef.current = setTimeout(() => {
-          accumulatedTextRef.current = '';
-          setTranscript('');
-        }, 3000);
-      }
-
-      // Actualizar transcripción visible en tiempo real
-      if (interimTranscript || accumulatedTextRef.current) {
-        setTranscript((accumulatedTextRef.current + ' ' + interimTranscript).trim());
-      }
-    };
-
-    recognitionRef.current.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error);
-      if (event.error === 'no-speech') return;
-      setIsListening(false);
-    };
-
-    recognitionRef.current.onend = () => {
-      if (isListeningRef.current) {
-        try {
-          recognitionRef.current.start();
-        } catch (e) {}
-      }
-    };
-
-    recognitionRef.current.start();
-  };
-
   const handleUserMessage = async (userMessage: string) => {
     if (!userMessage || userMessage.trim().length === 0) return;
+
+    // Si Jarvis estaba hablando, lo interrumpimos
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      setIsJarvisSpeaking(false);
+    }
 
     // Agregar mensaje del usuario al historial
     const updatedHistory: ConversationMessage[] = [
@@ -176,6 +64,7 @@ export function useSpeech() {
     ];
     setConversationHistory(updatedHistory);
     setIsThinking(true);
+    setTranscript(''); // Limpiar transcripción actual
 
     try {
       const token = await getAuthToken();
@@ -209,21 +98,9 @@ export function useSpeech() {
         },
       ]);
 
-      // IMPORTANTE: Marcar que Jarvis está hablando
       setIsJarvisSpeaking(true);
-      
-      // Hablar la respuesta (espera a que termine)
       await speakResponse(jarvisMsg);
-      
-      // IMPORTANTE: Marcar que Jarvis terminó
       setIsJarvisSpeaking(false);
-      
-      // ✅ PAUSA CRÍTICA: Esperar a que el audio de síntesis 
-      // termine de propagarse completamente a través del sistema
-      // Esto evita que se capture "cola" del audio después
-      console.log('⏸️  Pausa post-síntesis (600ms)...');
-      await new Promise(resolve => setTimeout(resolve, 600));
-      console.log('✅ Reactivando escucha');
       
     } catch (error) {
       console.error('Error calling Jarvis:', error);
@@ -233,9 +110,99 @@ export function useSpeech() {
     }
   };
 
+  const startListening = () => {
+    if (isThinking) return;
+    
+    // Interrumpir a Jarvis si estaba hablando
+    if (isJarvisSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsJarvisSpeaking(false);
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+      console.error('Speech recognition not supported in this browser');
+      alert('Tu navegador no soporta reconocimiento de voz.');
+      return;
+    }
+
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {}
+    }
+
+    manualStopRef.current = false;
+    recognitionRef.current = new SpeechRecognition();
+    recognitionRef.current.lang = 'es-ES';
+    
+    // IMPORTANTE: continuous en false hace que el navegador use su propio 
+    // detector de silencio súper estable. Cuando dejas de hablar, corta y dispara onend.
+    recognitionRef.current.continuous = false; 
+    recognitionRef.current.interimResults = true;
+
+    let finalTranscript = '';
+
+    recognitionRef.current.onstart = () => {
+      setIsListening(true);
+      setTranscript('');
+    };
+
+    recognitionRef.current.onresult = (event: any) => {
+      let interimTranscript = '';
+      let currentFinal = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const text = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          currentFinal += text;
+        } else {
+          interimTranscript += text;
+        }
+      }
+
+      if (currentFinal) {
+        finalTranscript += ' ' + currentFinal;
+      }
+
+      setTranscript((finalTranscript + ' ' + interimTranscript).trim());
+    };
+
+    recognitionRef.current.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      if (event.error !== 'no-speech') {
+        setIsListening(false);
+      }
+    };
+
+    recognitionRef.current.onend = () => {
+      setIsListening(false);
+      
+      // Si el usuario detuvo manualmente o hubo un error, no enviamos automáticamente,
+      // O si el texto está vacío
+      if (finalTranscript.trim().length > 0 && !manualStopRef.current) {
+        handleUserMessage(finalTranscript.trim());
+      }
+    };
+
+    recognitionRef.current.start();
+  };
+
+  const stopListening = () => {
+    manualStopRef.current = true;
+    setIsListening(false);
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {}
+    }
+  };
+
   const stopSpeaking = () => {
     if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
+      setIsJarvisSpeaking(false);
     }
   };
 
@@ -246,10 +213,8 @@ export function useSpeech() {
         return;
       }
       
-      // Cancelar discurso previo
       stopSpeaking();
 
-      // Dividir el texto en fragmentos (Bilingüe)
       const segments = text.split(/([.!?]+)/).filter(s => s.trim().length > 0);
       const combinedSegments: string[] = [];
       
@@ -275,7 +240,6 @@ export function useSpeech() {
 
       let currentIndex = 0;
 
-      // Reproducir segmentos de forma secuencial
       const speakNextSegment = () => {
         if (currentIndex >= combinedSegments.length) {
           resolve();
@@ -319,15 +283,6 @@ export function useSpeech() {
     });
   };
 
-  const stopListening = () => {
-    setIsListening(false);
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (e) {}
-    }
-  };
-
   return {
     isListening,
     isThinking,
@@ -337,5 +292,8 @@ export function useSpeech() {
     conversationHistory,
     startListening,
     stopListening,
+    handleUserMessage, // Exportado para permitir input de texto manual
+    stopSpeaking
   };
 }
+
