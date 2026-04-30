@@ -14,6 +14,8 @@ export function useSpeech() {
   const [isJarvisSpeaking, setIsJarvisSpeaking] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [volume, setVolume] = useState(0);
+  const [jarvisResponse, setJarvisResponse] = useState('');
+  const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
   
   const recognitionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -24,7 +26,6 @@ export function useSpeech() {
   const processingRef = useRef(false);
   
   const accumulatedTextRef = useRef('');
-  const speechTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearAccumulatorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Verificar soporte
