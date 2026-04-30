@@ -62,28 +62,24 @@ export function useSpeech() {
   useEffect(() => {
     if (!isListening || processingRef.current) return;
 
-    const VAD_THRESHOLD = 15; // Umbral de volumen para detectar voz
-    const SILENCE_GAP = 700; // ms de silencio para considerar que terminó de hablar
+    const VAD_THRESHOLD = 8; // Más sensible para hablar desde lejos
+    const SILENCE_GAP = 800; // Un poco más de margen para pensar
 
     const checkVAD = () => {
       if (volume > VAD_THRESHOLD) {
         silenceTimerRef.current = 0;
         isSpeakingRef.current = true;
-      } else if (isSpeakingRef.current) {
-        silenceTimerRef.current += 50; // Aproximado por el intervalo de ejecución
+      } else if (isSpeakingRef.current && transcript.length > 5) {
+        silenceTimerRef.current += 50;
         
-        // Si hay silencio suficiente y tenemos contenido, procesar
         if (silenceTimerRef.current >= SILENCE_GAP) {
           const fullText = (accumulatedTextRef.current + ' ' + transcript).toLowerCase();
           const hasJarvis = /jarvis|harvis|llarvis|yarbiz|service|charvis/i.test(fullText);
 
           if (hasJarvis && !processingRef.current) {
-            const message = (accumulatedTextRef.current + ' ' + transcript).trim();
-            if (message.length > 5) {
-              handleUserMessage(message);
-              isSpeakingRef.current = false;
-              silenceTimerRef.current = 0;
-            }
+            handleUserMessage(fullText);
+            isSpeakingRef.current = false;
+            silenceTimerRef.current = 0;
           }
         }
       }
@@ -224,7 +220,12 @@ export function useSpeech() {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
-    primeSpeechSynthesis(); // DESBLOQUEAR audio en móvil
+    primeSpeechSynthesis(); 
+    
+    if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume();
+    }
+    
     startVolumeAnalysis();
 
     if (recognitionRef.current) {
