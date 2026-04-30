@@ -4,7 +4,8 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 
@@ -80,4 +81,14 @@ export async function getAuthToken() {
     }
   }
   return null;
+}
+
+// Reset password
+export async function resetPassword(email: string) {
+  try {
+    await sendPasswordResetEmail(auth, email);
+  } catch (error) {
+    console.error('Firebase reset password error:', error);
+    throw error;
+  }
 }
