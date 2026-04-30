@@ -13,10 +13,13 @@ export function useSpeech() {
   const [isThinking, setIsThinking] = useState(false);
   const [isJarvisSpeaking, setIsJarvisSpeaking] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [jarvisResponse, setJarvisResponse] = useState('');
-  const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
+  const [volume, setVolume] = useState(0);
   
   const recognitionRef = useRef<any>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyzerRef = useRef<AnalyserNode | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
   const manualStopRef = useRef(true);
   const processingRef = useRef(false);
   
@@ -109,9 +112,55 @@ export function useSpeech() {
     }
   };
 
+  const startVolumeAnalysis = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      
+      const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+      const audioContext = new AudioContextClass();
+      audioContextRef.current = audioContext;
+      
+      const analyzer = audioContext.createAnalyser();
+      analyzer.fftSize = 256;
+      analyzerRef.current = analyzer;
+      
+      const source = audioContext.createMediaStreamSource(stream);
+      source.connect(analyzer);
+      
+      const bufferLength = analyzer.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      
+      const updateVolume = () => {
+        if (!analyzerRef.current) return;
+        analyzerRef.current.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          sum += dataArray[i];
+        }
+        const average = sum / bufferLength;
+        setVolume(average);
+        animationFrameRef.current = requestAnimationFrame(updateVolume);
+      };
+      
+      updateVolume();
+    } catch (e) {
+      console.error('Error starting volume analysis:', e);
+    }
+  };
+
+  const stopVolumeAnalysis = () => {
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+    if (audioContextRef.current) audioContextRef.current.close();
+    setVolume(0);
+  };
+
   const startListening = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
+
+    startVolumeAnalysis();
 
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch (e) {}
@@ -152,11 +201,12 @@ export function useSpeech() {
           setIsJarvisSpeaking(false);
         }
 
+        // REDUCIDO: 800ms de silencio para que la respuesta sea más ágil como ChatGPT
         speechTimeoutRef.current = setTimeout(() => {
           if (processingRef.current) return;
           const messageToSend = (accumulatedTextRef.current + ' ' + interimTranscript).trim();
-          if (messageToSend.length > 2) handleUserMessage(messageToSend);
-        }, 1000);
+          if (messageToSend.length > 3) handleUserMessage(messageToSend);
+        }, 800);
       } else {
         clearAccumulatorTimeoutRef.current = setTimeout(() => {
           accumulatedTextRef.current = '';
@@ -177,11 +227,12 @@ export function useSpeech() {
 
     recognitionRef.current.onend = () => {
       if (!manualStopRef.current) {
+        // Reinicio casi instantáneo para no perder el inicio de frases
         setTimeout(() => {
           try {
             if (!manualStopRef.current) recognitionRef.current.start();
           } catch (e) {}
-        }, 400);
+        }, 50);
       } else {
         setIsListening(false);
       }
@@ -195,6 +246,7 @@ export function useSpeech() {
   const stopListening = () => {
     manualStopRef.current = true;
     setIsListening(false);
+    stopVolumeAnalysis();
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch (e) {}
     }
@@ -249,6 +301,7 @@ export function useSpeech() {
     isListening,
     isThinking,
     isJarvisSpeaking,
+    volume,
     transcript,
     jarvisResponse,
     conversationHistory,

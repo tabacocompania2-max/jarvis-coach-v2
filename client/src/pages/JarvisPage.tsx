@@ -13,6 +13,7 @@ export const JarvisPage = () => {
     isListening, 
     isThinking, 
     isJarvisSpeaking,
+    volume,
     transcript,
     startListening, 
     stopListening,
@@ -66,11 +67,11 @@ export const JarvisPage = () => {
         <div className="relative">
           <motion.div 
             animate={{ 
-              scale: jarvisStatus === 'listening' ? [1, 1.1, 1] : 1,
+              scale: jarvisStatus === 'listening' ? 1 + (volume / 200) : 1,
               rotate: 360 
             }}
             transition={{ 
-              scale: { repeat: Infinity, duration: 1.5 },
+              scale: { type: "spring", stiffness: 300, damping: 15 },
               rotate: { repeat: Infinity, duration: 20, ease: "linear" }
             }}
             className="w-48 h-48 rounded-full border-2 border-cyan-500/30 flex items-center justify-center relative"
@@ -79,10 +80,11 @@ export const JarvisPage = () => {
               <motion.div 
                 animate={{ 
                   boxShadow: jarvisStatus === 'listening' 
-                    ? ["0 0 20px rgba(6, 182, 212, 0.5)", "0 0 60px rgba(6, 182, 212, 0.8)", "0 0 20px rgba(6, 182, 212, 0.5)"]
-                    : "0 0 20px rgba(6, 182, 212, 0.3)"
+                    ? [`0 0 ${20 + volume}px rgba(6, 182, 212, 0.5)`, `0 0 ${40 + volume}px rgba(6, 182, 212, 0.8)`, `0 0 ${20 + volume}px rgba(6, 182, 212, 0.5)`]
+                    : "0 0 20px rgba(6, 182, 212, 0.3)",
+                  scale: jarvisStatus === 'listening' ? 1 + (volume / 400) : 1
                 }}
-                transition={{ repeat: Infinity, duration: 2 }}
+                transition={{ duration: 0.1 }}
                 className="w-32 h-32 rounded-full bg-gradient-to-br from-cyan-400 to-cyan-600 flex items-center justify-center shadow-xl relative"
               >
                 {jarvisStatus === 'speaking' ? (
