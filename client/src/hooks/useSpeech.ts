@@ -19,8 +19,8 @@ export function useSpeech() {
   
   const recognitionRef = useRef<any>(null);
   const accumulatedTextRef = useRef('');
-  const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const clearAccumulatorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const speechTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearAccumulatorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     jarvisResponseRef.current = jarvisResponse;
