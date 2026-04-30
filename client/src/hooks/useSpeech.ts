@@ -161,7 +161,12 @@ export function useSpeech() {
       }
 
       const totalTextLower = (accumulatedTextRef.current + ' ' + interimTranscript).toLowerCase();
-      const hasJarvis = totalTextLower.includes('jarvis') || totalTextLower.includes('harvis') || totalTextLower.includes('yarbiz') || totalTextLower.includes('llarvis');
+      const hasJarvis = totalTextLower.includes('jarvis') || 
+                        totalTextLower.includes('harvis') || 
+                        totalTextLower.includes('yarbiz') || 
+                        totalTextLower.includes('llarvis') ||
+                        totalTextLower.includes('service') ||
+                        totalTextLower.includes('charvis');
 
       if (speechTimeoutRef.current) clearTimeout(speechTimeoutRef.current);
       if (clearAccumulatorTimeoutRef.current) clearTimeout(clearAccumulatorTimeoutRef.current);
@@ -173,15 +178,15 @@ export function useSpeech() {
           setIsJarvisSpeaking(false);
         }
 
-        // Esperar 1.8 segundos de silencio antes de mandar
+        // Esperar 1.0 segundos de silencio antes de mandar
         speechTimeoutRef.current = setTimeout(() => {
           if (processingRef.current) return;
           
           const messageToSend = (accumulatedTextRef.current + ' ' + interimTranscript).trim();
-          if (messageToSend) {
+          if (messageToSend.length > 3) {
             handleUserMessage(messageToSend);
           }
-        }, 1800);
+        }, 1000); 
       } else {
         // Si no ha dicho Jarvis, borrar la basura acumulada tras 4 segundos de silencio
         clearAccumulatorTimeoutRef.current = setTimeout(() => {
@@ -195,17 +200,28 @@ export function useSpeech() {
 
     recognitionRef.current.onerror = (event: any) => {
       console.error('Speech recognition error:', event.error);
+      if (event.error === 'not-allowed') {
+        alert('Por favor, permite el acceso al micrófono en los ajustes de tu navegador para que Jarvis pueda escucharte.');
+        manualStopRef.current = true;
+        setIsListening(false);
+      }
       if (event.error !== 'no-speech' && manualStopRef.current) {
         setIsListening(false);
       }
     };
 
     recognitionRef.current.onend = () => {
-      // Si no se detuvo manualmente, reiniciarlo inmediatamente (micrófono siempre encendido)
+      // Reinicio con delay para evitar bloqueos del navegador móvil o spam
       if (!manualStopRef.current) {
-        try {
-          recognitionRef.current.start();
-        } catch (e) {}
+        setTimeout(() => {
+          try {
+            if (!manualStopRef.current) {
+              recognitionRef.current.start();
+            }
+          } catch (e) {
+            console.error('Error restarting recognition:', e);
+          }
+        }, 400); 
       } else {
         setIsListening(false);
       }
