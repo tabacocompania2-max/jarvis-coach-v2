@@ -54,6 +54,43 @@ export function useSpeech() {
     loadVoices();
     window.speechSynthesis.onvoiceschanged = loadVoices;
   }, []);
+  const silenceTimerRef = useRef<number>(0);
+  const isSpeakingRef = useRef<boolean>(false);
+
+  // Lógica de VAD (Voice Activity Detection) basada en volumen real
+  useEffect(() => {
+    if (!isListening || processingRef.current) return;
+
+    const VAD_THRESHOLD = 15; // Umbral de volumen para detectar voz
+    const SILENCE_GAP = 700; // ms de silencio para considerar que terminó de hablar
+
+    const checkVAD = () => {
+      if (volume > VAD_THRESHOLD) {
+        silenceTimerRef.current = 0;
+        isSpeakingRef.current = true;
+      } else if (isSpeakingRef.current) {
+        silenceTimerRef.current += 50; // Aproximado por el intervalo de ejecución
+        
+        // Si hay silencio suficiente y tenemos contenido, procesar
+        if (silenceTimerRef.current >= SILENCE_GAP) {
+          const fullText = (accumulatedTextRef.current + ' ' + transcript).toLowerCase();
+          const hasJarvis = /jarvis|harvis|llarvis|yarbiz|service|charvis/i.test(fullText);
+
+          if (hasJarvis && !processingRef.current) {
+            const message = (accumulatedTextRef.current + ' ' + transcript).trim();
+            if (message.length > 5) {
+              handleUserMessage(message);
+              isSpeakingRef.current = false;
+              silenceTimerRef.current = 0;
+            }
+          }
+        }
+      }
+    };
+
+    const interval = setInterval(checkVAD, 50);
+    return () => clearInterval(interval);
+  }, [volume, isListening, transcript]);
 
   const handleUserMessage = async (userMessage: string) => {
     if (!userMessage || userMessage.trim().length === 0 || processingRef.current) return;
@@ -68,8 +105,12 @@ export function useSpeech() {
     ];
     setConversationHistory(updatedHistory);
     setIsThinking(true);
+    
+    // Resetear estados de escucha inmediatamente
     setTranscript('');
     accumulatedTextRef.current = '';
+    isSpeakingRef.current = false;
+    silenceTimerRef.current = 0;
 
     try {
       const token = await getAuthToken();
@@ -189,38 +230,25 @@ export function useSpeech() {
         }
       }
 
-      const totalTextLower = (accumulatedTextRef.current + ' ' + interimTranscript).toLowerCase();
-      const hasJarvis = /jarvis|harvis|llarvis|yarbiz|service|charvis/i.test(totalTextLower);
+      const currentText = (accumulatedTextRef.current + ' ' + interimTranscript).trim();
+      setTranscript(currentText);
 
-      if (speechTimeoutRef.current) clearTimeout(speechTimeoutRef.current);
-      if (clearAccumulatorTimeoutRef.current) clearTimeout(clearAccumulatorTimeoutRef.current);
-
-      if (hasJarvis) {
-        if (isJarvisSpeaking) {
-          window.speechSynthesis.cancel();
-          setIsJarvisSpeaking(false);
-        }
-
-        // REDUCIDO: 800ms de silencio para que la respuesta sea más ágil como ChatGPT
-        speechTimeoutRef.current = setTimeout(() => {
-          if (processingRef.current) return;
-          const messageToSend = (accumulatedTextRef.current + ' ' + interimTranscript).trim();
-          if (messageToSend.length > 3) handleUserMessage(messageToSend);
-        }, 800);
-      } else {
+      // Limpieza automática si no hay Jarvis (Buffer Circular mental)
+      if (!/jarvis|harvis|llarvis|yarbiz|service|charvis/i.test(currentText)) {
+        if (clearAccumulatorTimeoutRef.current) clearTimeout(clearAccumulatorTimeoutRef.current);
         clearAccumulatorTimeoutRef.current = setTimeout(() => {
-          accumulatedTextRef.current = '';
-          setTranscript('');
+          if (!isSpeakingRef.current) {
+            accumulatedTextRef.current = '';
+            setTranscript('');
+          }
         }, 3000);
       }
-
-      setTranscript((accumulatedTextRef.current + ' ' + interimTranscript).trim());
     };
 
     recognitionRef.current.onerror = (event: any) => {
       console.error('Recognition error:', event.error);
       if (event.error === 'not-allowed') {
-        alert('Activa el micrófono en los ajustes del sitio (candado en la barra de URL).');
+        alert('Activa el micrófono en los ajustes del sitio.');
         manualStopRef.current = true;
       }
     };
