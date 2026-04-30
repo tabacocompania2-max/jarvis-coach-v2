@@ -5,14 +5,15 @@ import { useSpeech } from '../hooks/useSpeech';
 
 export const JarvisPage = () => {
   const [jarvisStatus, setJarvisStatus] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
-  const [transcript, setTranscript] = useState('');
   const [response, setResponse] = useState('Hola Carlos, soy Jarvis. ¿En qué puedo ayudarte hoy con tu inglés?');
   const [textInput, setTextInput] = useState('');
 
   const { 
+    isSupported,
     isListening, 
     isThinking, 
     isJarvisSpeaking,
+    transcript,
     startListening, 
     stopListening,
     handleUserMessage,
@@ -34,14 +35,6 @@ export const JarvisPage = () => {
     }
   }, [jarvisResponse]);
 
-  useEffect(() => {
-    if (conversationHistory.length > 0) {
-      const lastMsg = conversationHistory[conversationHistory.length - 1];
-      if (lastMsg.role === 'user') {
-        setTranscript(lastMsg.content);
-      }
-    }
-  }, [conversationHistory]);
 
   const toggleMic = () => {
     if (isListening) {
@@ -61,6 +54,11 @@ export const JarvisPage = () => {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-between w-full max-w-md mx-auto py-8 px-6 relative h-full">
+      {!isSupported && (
+        <div className="absolute top-4 bg-red-500/80 text-white text-[10px] px-3 py-1 rounded-full z-50">
+          Navegador no compatible con voz
+        </div>
+      )}
       
       {/* Top Spacer */}
       <div className="flex-1 flex flex-col items-center justify-center w-full gap-8">
