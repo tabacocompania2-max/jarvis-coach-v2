@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Mic, MicOff, Volume2, Send, Square } from 'lucide-react';
+import { Mic, Volume2, Send, Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSpeech } from '../hooks/useSpeech';
 
