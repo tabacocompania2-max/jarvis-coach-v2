@@ -18,7 +18,6 @@ export const JarvisPage = () => {
     stopListening,
     handleUserMessage,
     stopSpeaking,
-    conversationHistory, 
     jarvisResponse 
   } = useSpeech();
 

@@ -44,11 +44,9 @@ export function useSpeech() {
   }, []);
 
   // Pre-cargar voces con fallback para móvil
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   useEffect(() => {
     const loadVoices = () => {
-      const v = window.speechSynthesis.getVoices();
-      if (v.length > 0) setVoices(v);
+      window.speechSynthesis.getVoices();
     };
     loadVoices();
     window.speechSynthesis.onvoiceschanged = loadVoices;
