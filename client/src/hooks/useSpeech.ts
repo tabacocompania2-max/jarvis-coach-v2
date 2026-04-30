@@ -16,13 +16,16 @@ export function useSpeech() {
   const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
   
   const recognitionRef = useRef<any>(null);
-  const manualStopRef = useRef(false);
+  const manualStopRef = useRef(true); // Empieza en true para no iniciar solo, el usuario decide si enciende el mic. Si quieres auto-start, ponlo en false
+  const processingRef = useRef(false);
+  
+  const accumulatedTextRef = useRef('');
+  const speechTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearAccumulatorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const handleUnload = () => {
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
     };
     window.addEventListener('beforeunload', handleUnload);
     if (window.speechSynthesis) window.speechSynthesis.cancel();
@@ -47,6 +50,8 @@ export function useSpeech() {
   const handleUserMessage = async (userMessage: string) => {
     if (!userMessage || userMessage.trim().length === 0) return;
 
+    processingRef.current = true;
+
     // Si Jarvis estaba hablando, lo interrumpimos
     if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
@@ -65,6 +70,7 @@ export function useSpeech() {
     setConversationHistory(updatedHistory);
     setIsThinking(true);
     setTranscript(''); // Limpiar transcripción actual
+    accumulatedTextRef.current = '';
 
     try {
       const token = await getAuthToken();
@@ -107,18 +113,11 @@ export function useSpeech() {
       setIsJarvisSpeaking(false);
     } finally {
       setIsThinking(false);
+      processingRef.current = false;
     }
   };
 
   const startListening = () => {
-    if (isThinking) return;
-    
-    // Interrumpir a Jarvis si estaba hablando
-    if (isJarvisSpeaking) {
-      window.speechSynthesis.cancel();
-      setIsJarvisSpeaking(false);
-    }
-
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     
     if (!SpeechRecognition) {
@@ -137,56 +136,84 @@ export function useSpeech() {
     recognitionRef.current = new SpeechRecognition();
     recognitionRef.current.lang = 'es-ES';
     
-    // IMPORTANTE: continuous en false hace que el navegador use su propio 
-    // detector de silencio súper estable. Cuando dejas de hablar, corta y dispara onend.
-    recognitionRef.current.continuous = false; 
+    // IMPORTANTE: continuous en true para escuchar todo el tiempo (hasta que se pare manualmente)
+    recognitionRef.current.continuous = true; 
     recognitionRef.current.interimResults = true;
-
-    let finalTranscript = '';
 
     recognitionRef.current.onstart = () => {
       setIsListening(true);
       setTranscript('');
+      accumulatedTextRef.current = '';
     };
 
     recognitionRef.current.onresult = (event: any) => {
+      if (processingRef.current) return; // Ignorar si ya estamos procesando un mensaje
+
       let interimTranscript = '';
-      let currentFinal = '';
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const text = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
-          currentFinal += text;
+          accumulatedTextRef.current += ' ' + text;
         } else {
           interimTranscript += text;
         }
       }
 
-      if (currentFinal) {
-        finalTranscript += ' ' + currentFinal;
+      const totalTextLower = (accumulatedTextRef.current + ' ' + interimTranscript).toLowerCase();
+      const hasJarvis = totalTextLower.includes('jarvis') || totalTextLower.includes('harvis') || totalTextLower.includes('yarbiz') || totalTextLower.includes('llarvis');
+
+      if (speechTimeoutRef.current) clearTimeout(speechTimeoutRef.current);
+      if (clearAccumulatorTimeoutRef.current) clearTimeout(clearAccumulatorTimeoutRef.current);
+
+      if (hasJarvis) {
+        // Interrumpir si Jarvis estaba hablando
+        if (isJarvisSpeaking) {
+          window.speechSynthesis.cancel();
+          setIsJarvisSpeaking(false);
+        }
+
+        // Esperar 1.8 segundos de silencio antes de mandar
+        speechTimeoutRef.current = setTimeout(() => {
+          if (processingRef.current) return;
+          
+          const messageToSend = (accumulatedTextRef.current + ' ' + interimTranscript).trim();
+          if (messageToSend) {
+            handleUserMessage(messageToSend);
+          }
+        }, 1800);
+      } else {
+        // Si no ha dicho Jarvis, borrar la basura acumulada tras 4 segundos de silencio
+        clearAccumulatorTimeoutRef.current = setTimeout(() => {
+          accumulatedTextRef.current = '';
+          setTranscript('');
+        }, 4000);
       }
 
-      setTranscript((finalTranscript + ' ' + interimTranscript).trim());
+      setTranscript((accumulatedTextRef.current + ' ' + interimTranscript).trim());
     };
 
     recognitionRef.current.onerror = (event: any) => {
       console.error('Speech recognition error:', event.error);
-      if (event.error !== 'no-speech') {
+      if (event.error !== 'no-speech' && manualStopRef.current) {
         setIsListening(false);
       }
     };
 
     recognitionRef.current.onend = () => {
-      setIsListening(false);
-      
-      // Si el usuario detuvo manualmente o hubo un error, no enviamos automáticamente,
-      // O si el texto está vacío
-      if (finalTranscript.trim().length > 0 && !manualStopRef.current) {
-        handleUserMessage(finalTranscript.trim());
+      // Si no se detuvo manualmente, reiniciarlo inmediatamente (micrófono siempre encendido)
+      if (!manualStopRef.current) {
+        try {
+          recognitionRef.current.start();
+        } catch (e) {}
+      } else {
+        setIsListening(false);
       }
     };
 
-    recognitionRef.current.start();
+    try {
+      recognitionRef.current.start();
+    } catch(e) {}
   };
 
   const stopListening = () => {
