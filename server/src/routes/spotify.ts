@@ -55,6 +55,10 @@ class SpotifyBackend {
       this.accessToken = response.data.access_token;
       this.tokenExpires = Date.now() + response.data.expires_in * 1000 - 60000;
 
+      if (!this.accessToken) {
+        throw new Error('No access token received from Spotify');
+      }
+
       console.log('✅ Token de Spotify obtenido en Railway');
       return this.accessToken;
     } catch (error) {
