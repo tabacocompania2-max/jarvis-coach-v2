@@ -76,10 +76,9 @@ class SpotifyBackend {
 
       const response = await axios.get('https://api.spotify.com/v1/search', {
         params: {
-          q: `${query} language:en`,
+          q: query,
           type: 'track',
           limit: 10,
-          market: 'US',
         },
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -111,10 +110,9 @@ class SpotifyBackend {
 
       const response = await axios.get('https://api.spotify.com/v1/search', {
         params: {
-          q: `${query} language:en`,
+          q: query,
           type: 'show',
           limit: 10,
-          market: 'US',
         },
         headers: {
           'Authorization': `Bearer ${token}`,
