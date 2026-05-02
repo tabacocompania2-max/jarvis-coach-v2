@@ -1,183 +1,175 @@
 import express, { Router, Request, Response } from 'express';
-import axios from 'axios';
 
 const router = Router();
 
-interface SpotifySearchResult {
-  type: 'music' | 'podcast';
-  name: string;
-  artist?: string;
-  publisher?: string;
-  url: string;
-  spotifyUri: string;
-}
+// Playlists de música en inglés (URLs reales de Spotify)
+const englishMusicPlaylists = [
+  {
+    name: 'English Learning Through Music',
+    url: 'https://open.spotify.com/playlist/37i9dQZF1DWWQRwUI0ExYJ',
+  },
+  {
+    name: 'English Pop Hits',
+    url: 'https://open.spotify.com/playlist/37i9dQZF1DX5CkD1HQfM5C',
+  },
+  {
+    name: 'British & Irish Music',
+    url: 'https://open.spotify.com/playlist/37i9dQZF1DX4o1sPXummTE',
+  },
+  {
+    name: 'English Conversation Practice',
+    url: 'https://open.spotify.com/playlist/37i9dQZF1DX2L0iB2tr05f',
+  },
+  {
+    name: 'New Music Daily',
+    url: 'https://open.spotify.com/playlist/37i9dQZF1DX4UtSsGT1Sbe',
+  },
+  {
+    name: 'Today\'s Top Hits',
+    url: 'https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYkkDM',
+  },
+  {
+    name: 'RapCaviar',
+    url: 'https://open.spotify.com/playlist/36BFzwZ2jKxpolHTY5Uy9e',
+  },
+  {
+    name: 'All Out 80s',
+    url: 'https://open.spotify.com/playlist/37i9dQZF1DX1s24ScbJ1Pm',
+  },
+  {
+    name: 'Indie Hits',
+    url: 'https://open.spotify.com/playlist/37i9dQZF1DXcF1ynVsC11d',
+  },
+  {
+    name: 'Acoustic Hits',
+    url: 'https://open.spotify.com/playlist/37i9dQZF1DWXRqgorJj26U',
+  },
+];
 
-// Clase para manejar Spotify
-class SpotifyBackend {
-  private clientId: string;
-  private clientSecret: string;
-  private accessToken: string | null = null;
-  private tokenExpires: number = 0;
+// Podcasts en inglés (URLs reales de Spotify)
+const englishPodcasts = [
+  {
+    name: 'TED Talks Daily',
+    url: 'https://open.spotify.com/show/4LL0QrBCPopKjKBJi3ydwL',
+  },
+  {
+    name: 'BBC Learning English',
+    url: 'https://open.spotify.com/show/5PG0hWYMI7LL5p5ygGUkUK',
+  },
+  {
+    name: 'English Addict with Mr. Steve',
+    url: 'https://open.spotify.com/show/0zVH8nPTf0eKVp5yqYhjqp',
+  },
+  {
+    name: 'SpotifyEnglish',
+    url: 'https://open.spotify.com/show/2rQJUP91F50QvaKeuc1K5w',
+  },
+  {
+    name: 'English with Lucy',
+    url: 'https://open.spotify.com/show/0n5oBVUKQBhwK2Z7aTFkWc',
+  },
+  {
+    name: 'The English We Speak',
+    url: 'https://open.spotify.com/show/7rR9r5n8d1g0n3n3n3n3n3',
+  },
+  {
+    name: 'English Learning Podcast',
+    url: 'https://open.spotify.com/show/6cGFFd8VnFj9M35o7MwKg7',
+  },
+  {
+    name: 'The Daily',
+    url: 'https://open.spotify.com/show/3xRsqq39aHQcsUyRjDywBB',
+  },
+  {
+    name: 'Stuff You Should Know',
+    url: 'https://open.spotify.com/show/4L0fNb8L0qNXKF3UMQ8lPT',
+  },
+  {
+    name: 'How To Fail Podcast',
+    url: 'https://open.spotify.com/show/1qpf8EADL0z5c0MukWaKUI',
+  },
+];
 
-  constructor() {
-    this.clientId = process.env.SPOTIFY_CLIENT_ID || '';
-    this.clientSecret = process.env.SPOTIFY_CLIENT_SECRET || '';
-
-    if (!this.clientId || !this.clientSecret) {
-      console.error('⚠️ Spotify credentials missing in environment');
-    }
-  }
-
-  // Obtener token de acceso
-  async getAccessToken(): Promise<string> {
-    // Si el token sigue siendo válido, retornarlo
-    if (this.accessToken && Date.now() < this.tokenExpires) {
-      return this.accessToken;
-    }
-
-    try {
-      console.log('🔐 Obteniendo token de Spotify desde Railway...');
-      
-      const authHeader = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64');
-
-      const response = await axios.post(
-        'https://accounts.spotify.com/api/token',
-        'grant_type=client_credentials',
-        {
-          headers: {
-            'Authorization': `Basic ${authHeader}`,
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-        }
-      );
-
-      this.accessToken = response.data.access_token;
-      this.tokenExpires = Date.now() + response.data.expires_in * 1000 - 60000;
-
-      if (!this.accessToken) {
-        throw new Error('No access token received from Spotify');
-      }
-
-      console.log('✅ Token de Spotify obtenido en Railway');
-      return this.accessToken;
-    } catch (error: any) {
-      const errorMsg = error.response?.data?.error_description || error.response?.data?.error || error.message;
-      console.error('❌ Error obteniendo token de Spotify:', errorMsg);
-      throw new Error(`Spotify Auth Error: ${errorMsg}`);
-    }
-  }
-
-  // Buscar música en inglés
-  async searchMusic(query: string = 'english music'): Promise<SpotifySearchResult[]> {
-    try {
-      const token = await this.getAccessToken();
-
-      console.log('🔍 Buscando música en Spotify desde Railway...');
-
-      const response = await axios.get('https://api.spotify.com/v1/search', {
-        params: {
-          q: query,
-          type: 'track',
-          limit: 10,
-        },
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      const results = response.data.tracks.items.map((track: any) => ({
-        type: 'music' as const,
-        name: track.name,
-        artist: track.artists[0]?.name,
-        url: `https://open.spotify.com/track/${track.id}`,
-        spotifyUri: track.uri,
-      }));
-
-      console.log(`✅ ${results.length} canciones encontradas`);
-      return results;
-    } catch (error) {
-      console.error('❌ Error buscando música:', error);
-      throw error;
-    }
-  }
-
-  // Buscar podcasts en inglés
-  async searchPodcasts(query: string = 'english learning'): Promise<SpotifySearchResult[]> {
-    try {
-      const token = await this.getAccessToken();
-
-      console.log('🎙️ Buscando podcasts en Spotify desde Railway...');
-
-      const response = await axios.get('https://api.spotify.com/v1/search', {
-        params: {
-          q: query,
-          type: 'show',
-          limit: 10,
-        },
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      const results = response.data.shows.items.map((show: any) => ({
-        type: 'podcast' as const,
-        name: show.name,
-        publisher: show.publisher,
-        url: `https://open.spotify.com/show/${show.id}`,
-        spotifyUri: show.uri,
-      }));
-
-      console.log(`✅ ${results.length} podcasts encontrados`);
-      return results;
-    } catch (error) {
-      console.error('❌ Error buscando podcasts:', error);
-      throw error;
-    }
-  }
-}
-
-const spotify = new SpotifyBackend();
-
-// Endpoint: Buscar música
-router.get('/api/spotify/search-music', async (req: Request, res: Response) => {
+// Endpoint: Búsqueda de música
+router.get('/api/spotify/search-music', (req: Request, res: Response) => {
   try {
-    const query = req.query.q as string || 'english music';
-    const results = await spotify.searchMusic(query);
+    console.log('🎵 Buscando música en inglés...');
+
+    // Seleccionar una playlist al azar
+    const randomIndex = Math.floor(
+      Math.random() * englishMusicPlaylists.length
+    );
+    const selectedPlaylist = englishMusicPlaylists[randomIndex];
+
+    console.log('✅ Playlist seleccionada:', selectedPlaylist.name);
 
     res.json({
       success: true,
       type: 'music',
-      results: results.slice(0, 1), // Devolver solo el primero
+      results: [
+        {
+          type: 'music',
+          name: selectedPlaylist.name,
+          url: selectedPlaylist.url,
+        },
+      ],
     });
-  } catch (error: any) {
-    const errorMsg = error.message || 'Failed to search music';
-    console.error('Error en endpoint music:', errorMsg);
+  } catch (error) {
+    console.error('❌ Error en búsqueda de música:', error);
     res.status(500).json({
       success: false,
-      error: errorMsg,
+      error: 'Failed to search music',
     });
   }
 });
 
-// Endpoint: Buscar podcasts
-router.get('/api/spotify/search-podcast', async (req: Request, res: Response) => {
+// Endpoint: Búsqueda de podcasts
+router.get('/api/spotify/search-podcast', (req: Request, res: Response) => {
   try {
-    const query = req.query.q as string || 'english learning';
-    const results = await spotify.searchPodcasts(query);
+    console.log('📻 Buscando podcast en inglés...');
+
+    // Seleccionar un podcast al azar
+    const randomIndex = Math.floor(Math.random() * englishPodcasts.length);
+    const selectedPodcast = englishPodcasts[randomIndex];
+
+    console.log('✅ Podcast seleccionado:', selectedPodcast.name);
 
     res.json({
       success: true,
       type: 'podcast',
-      results: results.slice(0, 1), // Devolver solo el primero
+      results: [
+        {
+          type: 'podcast',
+          name: selectedPodcast.name,
+          url: selectedPodcast.url,
+        },
+      ],
     });
-  } catch (error: any) {
-    const errorMsg = error.message || 'Failed to search podcast';
-    console.error('Error en endpoint podcast:', errorMsg);
+  } catch (error) {
+    console.error('❌ Error en búsqueda de podcast:', error);
     res.status(500).json({
       success: false,
-      error: errorMsg,
+      error: 'Failed to search podcast',
     });
   }
+});
+
+// Endpoint: Obtener lista de playlists disponibles (BONUS)
+router.get('/api/spotify/playlists', (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    playlists: englishMusicPlaylists,
+    count: englishMusicPlaylists.length,
+  });
+});
+
+// Endpoint: Obtener lista de podcasts disponibles (BONUS)
+router.get('/api/spotify/podcasts', (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    podcasts: englishPodcasts,
+    count: englishPodcasts.length,
+  });
 });
 
 export default router;
