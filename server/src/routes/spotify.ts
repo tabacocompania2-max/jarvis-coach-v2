@@ -37,16 +37,15 @@ class SpotifyBackend {
 
     try {
       console.log('🔐 Obteniendo token de Spotify desde Railway...');
+      
+      const authHeader = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64');
 
       const response = await axios.post(
         'https://accounts.spotify.com/api/token',
-        new URLSearchParams({
-          grant_type: 'client_credentials',
-          client_id: this.clientId,
-          client_secret: this.clientSecret,
-        }),
+        'grant_type=client_credentials',
         {
           headers: {
+            'Authorization': `Basic ${authHeader}`,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
         }
@@ -61,9 +60,10 @@ class SpotifyBackend {
 
       console.log('✅ Token de Spotify obtenido en Railway');
       return this.accessToken;
-    } catch (error) {
-      console.error('❌ Error obteniendo token:', error);
-      throw new Error('Failed to authenticate with Spotify');
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.error_description || error.response?.data?.error || error.message;
+      console.error('❌ Error obteniendo token de Spotify:', errorMsg);
+      throw new Error(`Spotify Auth Error: ${errorMsg}`);
     }
   }
 
@@ -151,11 +151,12 @@ router.get('/api/spotify/search-music', async (req: Request, res: Response) => {
       type: 'music',
       results: results.slice(0, 1), // Devolver solo el primero
     });
-  } catch (error) {
-    console.error('Error en endpoint:', error);
+  } catch (error: any) {
+    const errorMsg = error.message || 'Failed to search music';
+    console.error('Error en endpoint music:', errorMsg);
     res.status(500).json({
       success: false,
-      error: 'Failed to search music',
+      error: errorMsg,
     });
   }
 });
@@ -171,11 +172,12 @@ router.get('/api/spotify/search-podcast', async (req: Request, res: Response) =>
       type: 'podcast',
       results: results.slice(0, 1), // Devolver solo el primero
     });
-  } catch (error) {
-    console.error('Error en endpoint:', error);
+  } catch (error: any) {
+    const errorMsg = error.message || 'Failed to search podcast';
+    console.error('Error en endpoint podcast:', errorMsg);
     res.status(500).json({
       success: false,
-      error: 'Failed to search podcast',
+      error: errorMsg,
     });
   }
 });
