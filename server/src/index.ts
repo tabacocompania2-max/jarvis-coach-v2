@@ -6,6 +6,7 @@ import analyticsRoutes from './routes/analytics.routes';
 import authRoutes from './routes/auth.routes';
 import spotifyRoutes from './routes/spotify';
 import youtubeRoutes from './routes/youtube';
+import callingRoutes from './routes/calling';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -30,6 +31,7 @@ app.use('/api/user', analyticsRoutes);
 app.use('/api/auth', authRoutes);
 app.use(spotifyRoutes);
 app.use(youtubeRoutes);
+app.use(callingRoutes);
 
 // Health check
 app.get('/api/health', (req: Request, res: Response) => {
