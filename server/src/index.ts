@@ -4,6 +4,7 @@ import aiRoutes from './routes/ai.routes';
 import lessonRoutes from './routes/lessons.routes';
 import analyticsRoutes from './routes/analytics.routes';
 import authRoutes from './routes/auth.routes';
+import spotifyRoutes from './routes/spotify';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -20,6 +21,7 @@ app.use('/api/lessons', lessonRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/user', analyticsRoutes);
 app.use('/api/auth', authRoutes);
+app.use(spotifyRoutes);
 
 // Health check
 app.get('/api/health', (req: Request, res: Response) => {
