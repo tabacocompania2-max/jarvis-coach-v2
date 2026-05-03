@@ -7,6 +7,7 @@ import authRoutes from './routes/auth.routes';
 import spotifyRoutes from './routes/spotify';
 import youtubeRoutes from './routes/youtube';
 import callingRoutes from './routes/calling';
+import progressRoutes from './routes/progress';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -24,9 +25,9 @@ app.use((req, res, next) => {
 });
 
 // Routes
+app.use('/api/student', progressRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/lessons', lessonRoutes);
-app.use('/api/analytics', analyticsRoutes);
 app.use('/api/user', analyticsRoutes);
 app.use('/api/auth', authRoutes);
 app.use(spotifyRoutes);
