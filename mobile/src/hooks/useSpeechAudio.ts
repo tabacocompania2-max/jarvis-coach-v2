@@ -355,9 +355,9 @@ export function useSpeechAudio() {
     const callHandled = await handleSecureCall(userMessage, setJarvisResponse, speakResponse);
     if (callHandled) return;
 
-    // SEGUNDO: Verificar si es solicitud de media
-    const mediaResult = await handleMediaRequest(userMessage);
-
+    // SEGUNDO: Verificar si es solicitud de media (DESACTIVADO: Ahora lo maneja Grok de forma inteligente)
+    // const mediaResult = await handleMediaRequest(userMessage);
+    /*
     if (mediaResult) {
       // Si fue una solicitud de media, responder apropiadamente
       const response = mediaResult.type === 'podcast'
@@ -365,11 +365,9 @@ export function useSpeechAudio() {
         : `Te estoy poniendo ${mediaResult.title} en Spotify`;
 
       setJarvisResponse(response);
-      // setIsJarvisSpeaking(true);
-      // await speakResponse(response);
-      // setIsJarvisSpeaking(false);
       return;
     }
+    */
 
     // SI NO: Proceder con conversación normal
     const updatedHistory: ConversationMessage[] = [
@@ -389,7 +387,23 @@ export function useSpeechAudio() {
         updatedHistory.map(m => ({ role: m.role, content: m.content }))
       );
 
-      // EXTRAER COMANDO DE SPOTIFY API (Retrocompatibilidad si el prompt de Grok lo envía)
+      // EXTRAER COMANDO DE YOUTUBE (NUEVA LÓGICA INTELIGENTE)
+      const youtubeMusicMatch = response.match(/\[YOUTUBE_MUSIC:(.+?)\]/);
+      const youtubePodcastMatch = response.match(/\[YOUTUBE_PODCAST:(.+?)\]/);
+      
+      let youtubeQuery: string | null = null;
+      let isPodcastSearch = false;
+
+      if (youtubeMusicMatch) {
+        youtubeQuery = youtubeMusicMatch[1];
+        response = response.replace(/\[YOUTUBE_MUSIC:.+?\]/g, '').trim();
+      } else if (youtubePodcastMatch) {
+        youtubeQuery = youtubePodcastMatch[1];
+        isPodcastSearch = true;
+        response = response.replace(/\[YOUTUBE_PODCAST:.+?\]/g, '').trim();
+      }
+
+      // EXTRAER COMANDO DE SPOTIFY API (Retrocompatibilidad)
       const spotifyMatch = response.match(/\[SPOTIFY_SEARCH:(.+?)\]/);
       let spotifyQuery: string | null = null;
       if (spotifyMatch) {
@@ -400,6 +414,20 @@ export function useSpeechAudio() {
 
       setJarvisResponse(response);
       setConversationHistory(prev => [...prev, { role: 'assistant', content: response, timestamp: new Date().toISOString() }]);
+
+      // Ejecutar búsqueda de YouTube si se detectó el comando inteligente
+      if (youtubeQuery) {
+        console.log(`🤖 Jarvis Inteligente: Buscando ${isPodcastSearch ? 'podcast' : 'música'}: ${youtubeQuery}`);
+        if (isPodcastSearch) {
+          youtubeClientService.searchPodcast(youtubeQuery).then(result => {
+            if (result) youtubeClientService.openInYouTube(result.url);
+          });
+        } else {
+          youtubeClientService.searchMusic(youtubeQuery).then(result => {
+            if (result) youtubeClientService.openInYouTube(result.url);
+          });
+        }
+      }
 
       // Reproducir respuesta
       await speakResponse(response, spotifyQuery);
