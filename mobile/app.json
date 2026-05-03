@@ -1,0 +1,74 @@
+{
+  "expo": {
+    "name": "English Coach - Jarvis",
+    "slug": "english-coach-jarvis",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f0f1e"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTabletMode": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Jarvis necesita acceso al micrófono para escucharte y ser tu profesor de inglés",
+        "NSLocalNetworkUsageDescription": "Jarvis necesita acceso a la red local",
+        "NSBonjourServices": [
+          "_jarvis._tcp"
+        ],
+        "UIBackgroundModes": [
+          "audio"
+        ]
+      },
+      "bundleIdentifier": "com.jarvis.englishcoach"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0f0f1e"
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.CHANGE_NETWORK_STATE",
+        "android.permission.READ_CONTACTS",
+        "android.permission.CALL_PHONE",
+        "android.permission.USE_BIOMETRIC"
+      ],
+      "package": "com.jarvis.englishcoach",
+      "minSdkVersion": 24
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-av",
+        {
+          "microphonePermission": "El asistente Jarvis necesita tu micrófono para funcionar"
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Jarvis necesita acceso a tus contactos para realizar llamadas seguras."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Jarvis necesita verificar tu identidad con biometría."
+        }
+      ],
+      "expo-web-browser"
+    ]
+  }
+}
