@@ -390,17 +390,23 @@ export function useSpeechAudio() {
       // EXTRAER COMANDO DE YOUTUBE (NUEVA LÓGICA INTELIGENTE)
       const youtubeMusicMatch = response.match(/\[YOUTUBE_MUSIC:(.+?)\]/);
       const youtubePodcastMatch = response.match(/\[YOUTUBE_PODCAST:(.+?)\]/);
+      const youtubeLessonMatch = response.match(/\[YOUTUBE_LESSON:(.+?)\]/);
       
       let youtubeQuery: string | null = null;
-      let isPodcastSearch = false;
+      let youtubeType: 'music' | 'podcast' | 'lesson' = 'music';
 
       if (youtubeMusicMatch) {
         youtubeQuery = youtubeMusicMatch[1];
+        youtubeType = 'music';
         response = response.replace(/\[YOUTUBE_MUSIC:.+?\]/g, '').trim();
       } else if (youtubePodcastMatch) {
         youtubeQuery = youtubePodcastMatch[1];
-        isPodcastSearch = true;
+        youtubeType = 'podcast';
         response = response.replace(/\[YOUTUBE_PODCAST:.+?\]/g, '').trim();
+      } else if (youtubeLessonMatch) {
+        youtubeQuery = youtubeLessonMatch[1];
+        youtubeType = 'lesson';
+        response = response.replace(/\[YOUTUBE_LESSON:.+?\]/g, '').trim();
       }
 
       // EXTRAER COMANDO DE SPOTIFY API (Retrocompatibilidad)
@@ -417,9 +423,13 @@ export function useSpeechAudio() {
 
       // Ejecutar búsqueda de YouTube si se detectó el comando inteligente
       if (youtubeQuery) {
-        console.log(`🤖 Jarvis Inteligente: Buscando ${isPodcastSearch ? 'podcast' : 'música'}: ${youtubeQuery}`);
-        if (isPodcastSearch) {
+        console.log(`🤖 Jarvis Inteligente: Buscando ${youtubeType}: ${youtubeQuery}`);
+        if (youtubeType === 'podcast') {
           youtubeClientService.searchPodcast(youtubeQuery).then(result => {
+            if (result) youtubeClientService.openInYouTube(result.url);
+          });
+        } else if (youtubeType === 'lesson') {
+          youtubeClientService.searchLesson(youtubeQuery).then(result => {
             if (result) youtubeClientService.openInYouTube(result.url);
           });
         } else {

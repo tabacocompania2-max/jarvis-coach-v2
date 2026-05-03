@@ -44,3 +44,39 @@ export async function callGroqAI(
     throw new Error(`Failed to get response from Groq: ${error.message}`);
   }
 }
+
+export async function rankYouTubeResults(
+  intent: string,
+  results: Array<{ title: string; description: string; channelTitle: string }>,
+  type: 'music' | 'podcast' | 'lesson'
+): Promise<number> {
+  const prompt = `Actúa como un selector experto de contenido educativo y musical.
+  El usuario quiere: "${intent}"
+  Tipo de contenido buscado: ${type}
+  
+  Analiza estos 5 resultados de YouTube y elige el índice (0-4) del que mejor se adapte.
+  Criterios:
+  - Si es 'lesson', prioriza canales educativos y títulos que indiquen enseñanza.
+  - Si es 'podcast', busca videos largos (no shorts) y canales de podcasts reales.
+  - Si es 'music', busca el video oficial o audio de alta calidad.
+  
+  RESULTADOS:
+  ${results.map((r, i) => `${i}: Título: ${r.title} | Canal: ${r.channelTitle} | Desc: ${r.description.substring(0, 100)}`).join('\n')}
+  
+  Responde ÚNICAMENTE con el número del índice (ej: 0). No des explicaciones.`;
+
+  try {
+    const completion = await groq.chat.completions.create({
+      messages: [{ role: 'user', content: prompt }],
+      model: 'llama-3.1-8b-instant', // Usamos un modelo rápido para esto
+      temperature: 0,
+      max_tokens: 10,
+    });
+
+    const index = parseInt(completion.choices[0]?.message?.content || '0');
+    return isNaN(index) ? 0 : index;
+  } catch (error) {
+    console.error('Ranking Error:', error);
+    return 0;
+  }
+}

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { rankYouTubeResults } from './ai.service';
 
 interface YouTubeSearchResult {
   id: string;
@@ -20,7 +21,7 @@ class YouTubeService {
     }
   }
 
-  // Buscar música en YouTube
+  // Buscar música en YouTube con ranking por IA
   async searchMusic(query: string = 'english music'): Promise<YouTubeSearchResult> {
     try {
       console.log('🎵 Buscando música en YouTube:', query);
@@ -28,43 +29,43 @@ class YouTubeService {
       const response = await axios.get(this.apiUrl, {
         params: {
           part: 'snippet',
-          q: `${query} music`,
+          q: `${query} official audio music`,
           type: 'video',
           maxResults: 5,
           videoCategoryId: '10', // Música
           order: 'relevance',
           key: this.apiKey,
-          relevanceLanguage: 'en',
         },
         timeout: 10000,
       });
 
       const items = response.data.items;
+      if (!items || items.length === 0) throw new Error('No music found');
 
-      if (!items || items.length === 0) {
-        throw new Error('No music found');
-      }
+      // Ranking por IA
+      const candidates = items.map((item: any) => ({
+        title: item.snippet.title,
+        description: item.snippet.description,
+        channelTitle: item.snippet.channelTitle,
+      }));
 
-      // Seleccionar el primer resultado
-      const video = items[0];
+      const bestIndex = await rankYouTubeResults(query, candidates, 'music');
+      const video = items[bestIndex] || items[0];
 
-      const result: YouTubeSearchResult = {
+      return {
         id: video.id.videoId,
         title: video.snippet.title,
         channelTitle: video.snippet.channelTitle,
         thumbnail: video.snippet.thumbnails.default.url,
         url: `https://www.youtube.com/watch?v=${video.id.videoId}`,
       };
-
-      console.log('✅ Canción encontrada:', result.title);
-      return result;
     } catch (error) {
-      console.error('❌ Error buscando música en YouTube:', error);
+      console.error('❌ Error buscando música:', error);
       throw error;
     }
   }
 
-  // Buscar podcasts en YouTube
+  // Buscar podcasts en YouTube con ranking por IA
   async searchPodcast(query: string = 'english learning podcast'): Promise<YouTubeSearchResult> {
     try {
       console.log('📻 Buscando podcast en YouTube:', query);
@@ -72,37 +73,79 @@ class YouTubeService {
       const response = await axios.get(this.apiUrl, {
         params: {
           part: 'snippet',
-          q: `${query} english`,
+          q: `${query} podcast episode`,
           type: 'video',
           maxResults: 5,
           order: 'relevance',
           key: this.apiKey,
-          relevanceLanguage: 'en',
         },
         timeout: 10000,
       });
 
       const items = response.data.items;
+      if (!items || items.length === 0) throw new Error('No podcast found');
 
-      if (!items || items.length === 0) {
-        throw new Error('No podcast found');
-      }
+      const candidates = items.map((item: any) => ({
+        title: item.snippet.title,
+        description: item.snippet.description,
+        channelTitle: item.snippet.channelTitle,
+      }));
 
-      // Seleccionar el primer resultado
-      const video = items[0];
+      const bestIndex = await rankYouTubeResults(query, candidates, 'podcast');
+      const video = items[bestIndex] || items[0];
 
-      const result: YouTubeSearchResult = {
+      return {
         id: video.id.videoId,
         title: video.snippet.title,
         channelTitle: video.snippet.channelTitle,
         thumbnail: video.snippet.thumbnails.default.url,
         url: `https://www.youtube.com/watch?v=${video.id.videoId}`,
       };
-
-      console.log('✅ Podcast encontrado:', result.title);
-      return result;
     } catch (error) {
-      console.error('❌ Error buscando podcast en YouTube:', error);
+      console.error('❌ Error buscando podcast:', error);
+      throw error;
+    }
+  }
+
+  // Buscar lecciones educativas con ranking por IA
+  async searchLesson(query: string): Promise<YouTubeSearchResult> {
+    try {
+      console.log('🎓 Buscando lección educativa en YouTube:', query);
+
+      const response = await axios.get(this.apiUrl, {
+        params: {
+          part: 'snippet',
+          q: `${query} english lesson tutorial`,
+          type: 'video',
+          maxResults: 5,
+          videoCategoryId: '27', // Educación
+          order: 'relevance',
+          key: this.apiKey,
+        },
+        timeout: 10000,
+      });
+
+      const items = response.data.items;
+      if (!items || items.length === 0) throw new Error('No lesson found');
+
+      const candidates = items.map((item: any) => ({
+        title: item.snippet.title,
+        description: item.snippet.description,
+        channelTitle: item.snippet.channelTitle,
+      }));
+
+      const bestIndex = await rankYouTubeResults(query, candidates, 'lesson');
+      const video = items[bestIndex] || items[0];
+
+      return {
+        id: video.id.videoId,
+        title: video.snippet.title,
+        channelTitle: video.snippet.channelTitle,
+        thumbnail: video.snippet.thumbnails.default.url,
+        url: `https://www.youtube.com/watch?v=${video.id.videoId}`,
+      };
+    } catch (error) {
+      console.error('❌ Error buscando lección:', error);
       throw error;
     }
   }

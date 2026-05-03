@@ -68,6 +68,34 @@ class YouTubeClientService {
     }
   }
 
+  async searchLesson(query: string = 'english lesson'): Promise<YouTubeSearchResult | null> {
+    try {
+      console.log('🎓 Buscando lección en YouTube desde Railway...');
+
+      const response = await axios.get(
+        `${this.apiUrl}/api/youtube/search-lesson`,
+        {
+          params: {
+            q: query,
+          },
+          timeout: 10000,
+        }
+      );
+
+      const result = response.data.result;
+
+      if (result) {
+        console.log('✅ Lección encontrada:', result.name);
+        return result;
+      }
+
+      return null;
+    } catch (error) {
+      console.error('❌ Error buscando lección:', error);
+      throw error;
+    }
+  }
+
   async openInYouTube(url: string): Promise<void> {
     try {
       console.log('🔗 Intentando abrir YouTube de forma agresiva:', url);

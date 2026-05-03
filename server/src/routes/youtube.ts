@@ -55,4 +55,30 @@ router.get('/api/youtube/search-podcast', async (req: Request, res: Response) =>
   }
 });
 
+// Endpoint: Buscar lección
+router.get('/api/youtube/search-lesson', async (req: Request, res: Response) => {
+  try {
+    const query = (req.query.q as string) || 'english lesson';
+    const result = await youtubeService.searchLesson(query);
+
+    res.json({
+      success: true,
+      type: 'lesson',
+      result: {
+        type: 'lesson',
+        name: result.title,
+        channel: result.channelTitle,
+        url: result.url,
+        thumbnail: result.thumbnail,
+      },
+    });
+  } catch (error) {
+    console.error('Error en endpoint de lección:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to search lesson on YouTube',
+    });
+  }
+});
+
 export default router;
