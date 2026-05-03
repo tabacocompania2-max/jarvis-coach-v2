@@ -219,13 +219,13 @@ export function useSpeechAudio() {
       const whisperResult = await whisperService.transcribeAudio(audioUri);
       const text = whisperResult.text || '';
       
-      // DETECCIÓN DE WAKE WORD "JARVIS"
-      // Si el interruptor maestro está en ON, NO necesitamos decir "Jarvis"
-      const hasWakeWord = text.toLowerCase().includes('jarvis');
+      // DETECCIÓN DE WAKE WORD "JARVIS" (MÁS FLEXIBLE PARA RUIDO/ACENTOS)
+      const wakeWordRegex = /jarvis|yarvis|harvis|llarvis|yarbiz|service|charvis|garbis/i;
+      const hasWakeWord = wakeWordRegex.test(text);
       const isCallInProgress = isCallActiveRef.current; 
 
       if (!hasWakeWord && !isCallInProgress) {
-        console.log('🔇 No se mencionó "Jarvis" y el Modo Seguridad está OFF. Ignorando...');
+        console.log('🔇 No se detectó una llamada a "Jarvis" clara. Ignorando...');
         startListening();
         return;
       }
