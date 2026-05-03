@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import * as crypto from 'crypto';
 import { securityService } from '../services/securityService';
 
 const router = Router();
