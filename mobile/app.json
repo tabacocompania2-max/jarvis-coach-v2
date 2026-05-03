@@ -2,6 +2,8 @@
   "expo": {
     "name": "English Coach - Jarvis",
     "slug": "english-coach-jarvis",
+    "owner": "carlosmanuel11",
+    "scheme": "jarvis-coach",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -41,7 +43,9 @@
         "android.permission.CHANGE_NETWORK_STATE",
         "android.permission.READ_CONTACTS",
         "android.permission.CALL_PHONE",
-        "android.permission.USE_BIOMETRIC"
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.WRITE_CONTACTS",
+        "android.permission.USE_FINGERPRINT"
       ],
       "package": "com.jarvis.englishcoach",
       "minSdkVersion": 24
@@ -68,7 +72,13 @@
           "faceIDPermission": "Jarvis necesita verificar tu identidad con biometría."
         }
       ],
-      "expo-web-browser"
-    ]
+      "expo-web-browser",
+      "expo-audio"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "edf0f54a-ce84-4d29-915d-85b34529997c"
+      }
+    }
   }
 }
